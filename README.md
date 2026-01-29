@@ -4,7 +4,9 @@ Inspector is a high-performance, open-source visualization tool designed for dev
 
 **Live Demo:** [ai-inspector.vercel.app](https://ai-inspector.vercel.app/)
 
-<img src="./screenshot-of-inspector-ui.png" alt="Inspector Preview" width="768" />
+| Before Inspector | After Inspector |
+:-------------------------:|:-------------------------:
+<img src="./screenshot-of-raw-export.png" alt="Inspector Preview" width="384" /> | <img src="./screenshot-of-inspector-ui.png" alt="Inspector Preview" width="384" />
 
 ## Why use this?
 
