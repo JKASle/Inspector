@@ -192,17 +192,17 @@ body {
     border-color: var(--accent-primary);
 }
 
-.search-toggle {
+button.search-toggle {
     font-size: 16px;
     color: var(--text-muted);
     flex-shrink: 0;
 }
 
-.search-toggle:hover, .search-toggle.active {
+button.search-toggle:hover, button.search-toggle.active {
     color: var(--text-main);
 }
 
-.search-toggle.active {
+button.search-toggle.active {
     background-color: var(--accent-surface);
 }
 
