@@ -10,7 +10,7 @@ Inspector is a high-performance, open-source visualization tool designed for dev
 
 Google AI Studio is an excellent prototyping environment, but managing long context windows and analyzing history exports presents significant challenges:
 
-*   **Search & Retrieval:** It is notoriously difficult to search through long conversations within the native interface. Finding specific past prompts or responses in a 50k+ token history is often impossible.
+*   **Search & Retrieval:** It is notoriously difficult to search through long conversations within the native interface. Finding specific past prompts or responses in a 250k+ token history is often just pure pain.
 *   **Unreadable Exports:** AI Studio exports data to Google Drive as raw, structured JSON. This format is illegible for humans trying to read the conversation flow or analyze the logic.
 *   **Hidden Metadata:** Critical information like "Chain of Thought" reasoning blocks, safety ratings, and exact token counts per message are often obscured or completely invisible in the native UI.
 
