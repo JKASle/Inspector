@@ -2,8 +2,6 @@
 
 Inspector is a high-performance, open-source visualization tool designed for developers working with Google AI Studio. It transforms raw, difficult-to-read JSON exports into a clean, readable, and interactive conversation timeline.
 
-**Live Demo:** [ai-inspector.vercel.app](https://ai-inspector.vercel.app/)
-
 | Before Inspector | After Inspector |
 :-------------------------:|:-------------------------:
 <img src="./screenshot-of-raw-export.png" alt="Inspector Preview" width="384" /> | <img src="./screenshot-of-inspector-ui.png" alt="Inspector Preview" width="384" />
