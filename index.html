@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Inspector - Google AI Studio Viewer</title>
+
+    <link rel="icon" href="./favicon.ico" sizes="any">
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <link id="highlight-stylesheet" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/androidstudio.min.css">
+
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+    <div id="sidebar-overlay"></div>
+
+    <!-- Loading Screen -->
+    <div id="loading-overlay" class="hidden">
+        <div class="spinner"></div>
+        <div class="loading-text">Processing...</div>
+        <button id="cancel-processing-btn" class="btn btn-secondary" style="margin-top:20px; border-color:white; color:white; background:transparent;">Cancel / Stop</button>
+    </div>
+
+    <!-- Image Modal (Redesigned) -->
+    <div id="image-modal" class="hidden">
+        <div class="modal-content image-viewer-content">
+            <div class="text-viewer-header"> <!-- Reuse text viewer header style -->
+                <span id="image-viewer-filename">Image Preview</span>
+                <div class="viewer-actions">
+                    <button id="download-image-btn" class="icon-btn" title="Download"><i class="ph ph-download-simple"></i></button>
+                    <button id="close-image-modal-btn" class="icon-btn"><i class="ph ph-x"></i></button>
+                </div>
+            </div>
+            <div class="image-wrapper">
+                <img id="modal-img" src="" alt="Full view">
+            </div>
+        </div>
+    </div>
+
+    <!-- Text Viewer Modal -->
+    <div id="text-viewer-modal" class="hidden">
+        <div class="modal-content text-viewer-content">
+            <div class="text-viewer-header">
+                <div class="viewer-title-group">
+                    <span id="text-viewer-filename">File Content</span>
+                    <span id="text-viewer-lang-tag" class="viewer-lang-tag"></span>
+                </div>
+                <div class="viewer-actions">
+                    <button id="copy-viewer-btn" class="copy-btn"><i class="ph ph-copy"></i> Copy</button>
+                    <button id="close-text-viewer-btn" class="icon-btn"><i class="ph ph-x"></i></button>
+                </div>
+            </div>
+            <pre><code id="text-viewer-code" class="hljs"></code></pre>
+        </div>
+    </div>
+
+    <!-- Error Modal -->
+    <div id="error-modal" class="hidden">
+        <div class="error-dialog">
+            <div class="error-header">
+                <i class="ph-fill ph-warning-circle"></i>
+                <span>System Notification</span>
+            </div>
+            <div class="error-body">
+                <p id="error-message-text">An error occurred.</p>
+                <div id="error-gif-container" class="hidden">
+                    <img src="./share-instruction.gif" alt="Share Settings: Anyone with link">
+                    <p>Ensure sharing is set to "Anyone with the link".</p>
+                </div>
+            </div>
+            <div class="error-footer">
+                <button id="close-error-btn" class="btn btn-primary btn-sm">Dismiss</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Theme Preview Widget -->
+    <div id="theme-preview-container" class="hidden"></div>
+
+    <aside id="sidebar">
+        <div class="sidebar-top">
+            <div class="brand">
+                <img src="./favicon.svg" alt="Logo" class="logo-img">
+                <div class="brand-text">
+                    <h1>Inspector</h1>
+                    <a href="https://github.com/marcelamayr/Gemini-json-Viewer" target="_blank" class="version-link">Open-source</a>
+                </div>
+                <button id="sidebar-close-btn" class="icon-btn mobile-only">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+
+            <div class="search-group">
+                <button id="deepSearchToggle" class="icon-btn search-toggle" title="Search all content">
+                    <i class="ph ph-book-open-text"></i>
+                </button>
+                <div class="search-input-wrapper">
+                    <i class="ph ph-magnifying-glass search-icon"></i>
+                    <input type="text" id="searchPrompts" placeholder="Search prompts...">
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-nav">
+
+            <div id="history-section" class="hidden">
+                <div class="sidebar-mini-tabs">
+                    <button class="mini-tab active" data-target="recent">History</button>
+                    <button class="mini-tab" data-target="pinned">Pinned</button>
+                </div>
+
+                <div id="view-recent" class="history-view active">
+                    <div id="recent-files-list" class="scrolling-pinned"></div>
+                    <button id="clearRecentsBtn" class="clear-history-btn" title="Clear Recent History">
+                        <i class="ph ph-trash"></i> Clear History
+                    </button>
+                </div>
+
+                <div id="view-pinned" class="history-view">
+                    <div id="pinned-files-list" class="scrolling-pinned"></div>
+                </div>
+
+                <div class="separator"></div>
+            </div>
+
+            <div class="nav-label">Actions</div>
+            <button id="cinemaModeBtn" class="nav-item">
+                <i class="ph ph-play-circle"></i>
+                <span>Cinema Mode</span>
+            </button>
+
+            <div class="nav-label mt-4">Preferences</div>
+
+            <div class="sidebar-settings">
+
+                <span class="setting-title">View Mode</span>
+                <div class="mode-toggle-wrapper">
+                    <span class="toggle-label text-right">Focus</span>
+                    <label class="switch">
+                        <input type="checkbox" id="sidebarModeToggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <span class="toggle-label text-left">Scroll</span>
+                </div>
+
+                <span class="setting-title" style="align-self:start; padding-top:6px;">Code Theme</span>
+                <div class="custom-select-wrapper" id="codeThemeWrapper">
+                    <div class="custom-select-trigger" id="codeThemeTrigger">
+                        <span id="currentThemeName">Android Studio</span>
+                        <i class="ph ph-caret-down"></i>
+                    </div>
+                    <div class="custom-options" id="codeThemeOptions">
+                        <!-- Options injected by JS -->
+                    </div>
+                </div>
+
+                <span class="setting-title">Content Width</span>
+                <div class="slider-wrapper" style="width:100%">
+                    <input type="range" id="widthSlider" min="600" max="1600" step="50" class="styled-range">
+                </div>
+
+                <span class="setting-title">Metadata</span>
+                <div class="mode-toggle-wrapper">
+                    <span class="toggle-label text-right">Collapsed</span>
+                    <label class="switch">
+                        <input type="checkbox" id="metadataCollapseToggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <span class="toggle-label text-left">Expanded</span>
+                </div>
+
+                <span class="setting-title">Thinking</span>
+                <div class="mode-toggle-wrapper">
+                    <span class="toggle-label text-right">Collapsed</span>
+                    <label class="switch">
+                        <input type="checkbox" id="thinkingModeToggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <span class="toggle-label text-left">Expanded</span>
+                </div>
+
+                <span class="setting-title">Code Block</span>
+                <div class="mode-toggle-wrapper">
+                    <span class="toggle-label text-right">Long</span>
+                    <label class="switch">
+                        <input type="checkbox" id="scrollableCodeToggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <span class="toggle-label text-left">Short</span>
+                </div>
+
+                <span class="setting-title">Code Wrap</span>
+                <div class="mode-toggle-wrapper">
+                    <span class="toggle-label text-right">Off</span>
+                    <label class="switch">
+                        <input type="checkbox" id="wrapCodeToggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <span class="toggle-label text-left">On</span>
+                </div>
+            </div>
+
+            <div class="nav-label mt-4">Conversation</div>
+            <div id="prompt-list" class="scrollable-list">
+                <div class="empty-state-sidebar">
+                    <span>Load a file to view conversation</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-footer">
+            <button id="theme-toggle" class="footer-btn">
+                <i class="ph-fill ph-moon"></i>
+                <span>Dark Mode</span>
+            </button>
+        </div>
+    </aside>
+
+    <main id="workspace">
+        <header class="toolbar">
+            <div class="toolbar-left">
+                <button id="sidebar-toggle-btn" class="icon-btn">
+                    <i class="ph ph-list"></i>
+                </button>
+                <div class="file-info">
+                    <span id="filename-display" class="filename">No file loaded</span>
+                </div>
+                <div class="btn-group hidden" id="downloadGroup">
+                    <button id="downloadBtn" class="btn btn-secondary btn-left" title="Download Original JSON">
+                        <i class="ph ph-download-simple"></i>
+                        <span class="desktop-only">Download JSON</span>
+                    </button>
+                    <button id="copyOriginalBtn" class="btn btn-secondary btn-right" title="Copy Original JSON to Clipboard">
+                        <i class="ph ph-copy"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div id="shareBtnWrapper">
+                <div id="shareBtn" class="btn btn-secondary disabled-feature">
+                    <i class="ph ph-share-network"></i>
+                    <span>Share</span>
+                </div>
+                <div class="custom-tooltip">
+                    Want a 'shareable link'? This isn't a feature yet. Create a feature request or 👍 an existing one on <a href="https://github.com/marcelamayr/Gemini-json-Viewer" target="_blank">GitHub</a>!
+                </div>
+            </div>
+
+            <div class="toolbar-actions">
+                <div class="btn-group hidden" id="exportGroup">
+                    <button id="exportBtn" class="btn btn-secondary btn-left" title="Download Clean JSON">
+                        <i class="ph ph-export"></i>
+                        <span class="desktop-only">Strip JSON</span>
+                    </button>
+                    <button id="copyCleanBtn" class="btn btn-secondary btn-right" title="Copy to Clipboard">
+                        <i class="ph ph-copy"></i>
+                    </button>
+                </div>
+
+                <div class="btn-group" id="loadGroup">
+                    <button id="linkBtn" class="btn btn-primary btn-left" title="Load from Drive Link">
+                        <i class="ph ph-link"></i>
+                    </button>
+
+                    <label for="fileInput" class="btn btn-primary btn-middle btn-label">
+                        Import JSON
+                    </label>
+
+                    <button id="pasteBtn" class="btn btn-primary btn-right" title="Paste from Clipboard (JSON or Link)">
+                        <i class="ph ph-clipboard-text"></i>
+                    </button>
+
+                    <!-- Link Popover -->
+                    <div id="link-popover" class="hidden">
+                        <div class="popover-arrow"></div>
+                        <div class="popover-content">
+                            <input type="text" id="driveLinkInput" placeholder="Paste Google Drive or AI Studio Link..." autocomplete="off">
+                            <button id="driveLoadBtn" class="btn btn-primary btn-sm">Load</button>
+                        </div>
+                        <div class="popover-footer">
+                            <div class="help-container">
+                                <span class="help-trigger">How to get link? <i class="ph ph-info"></i></span>
+                                <div class="gif-tooltip">
+                                    <img src="./share-instruction.gif" alt="Share Settings: Anyone with link">
+                                    <p>Select "Anyone with the link"</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="drive-error-msg" class="error-msg hidden">
+                            Link is private. See help above.
+                        </div>
+                    </div>
+                </div>
+
+                <input type="file" id="fileInput" hidden>
+            </div>
+        </header>
+
+        <div id="scroll-container">
+            <div class="content-wrapper">
+
+                <div id="metadata-panel" class="panel hidden">
+                    <div class="tabs-nav" id="metadata-header">
+                        <div class="tabs-container">
+                            <button class="tab-btn active" data-tab="tab-run-settings">Settings</button>
+                            <button class="tab-btn" data-tab="tab-system">System Instructions</button>
+                            <button class="tab-btn" data-tab="tab-citations">Citations</button>
+                        </div>
+                        <button class="collapse-btn"><i class="ph ph-caret-up"></i></button>
+                    </div>
+                    <div class="panel-body" id="metadata-body">
+                        <div id="tab-run-settings" class="tab-pane active"></div>
+                        <div id="tab-system" class="tab-pane"></div>
+                        <div id="tab-citations" class="tab-pane"></div>
+                    </div>
+                </div>
+
+                <div id="chat-stream">
+                    <div class="empty-state-hero">
+                        <div class="hero-icon">
+                            <i class="ph ph-file-text"></i>
+                        </div>
+                        <h2>Ready to Inspect</h2>
+                        <p>Drag & Drop a file, use the link loader, or import a JSON from Google AI Studio.</p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div id="nav-widget" class="hidden">
+            <button id="scroll-top" title="Top of View"><i class="ph ph-arrow-line-up"></i></button>
+            <button id="scroll-prev" title="Previous Message"><i class="ph ph-caret-up"></i></button>
+            <button id="scroll-next" title="Next Message"><i class="ph ph-caret-down"></i></button>
+            <button id="scroll-bottom" title="Bottom of View"><i class="ph ph-arrow-line-down"></i></button>
+        </div>
+
+    </main>
+
+    <div id="toast" class="toast">
+        <i class="ph-fill ph-check-circle"></i>
+        <span id="toast-msg">Copied to clipboard</span>
+    </div>
+
+    <template id="message-tooltip-template">
+        <div class="message-tooltip">
+            <button class="tooltip-btn" data-action="copy-md" title="Copy as Markdown"><i class="ph ph-markdown-logo"></i></button>
+            <button class="tooltip-btn" data-action="copy-text" title="Copy as Plain Text"><i class="ph ph-text-t"></i></button>
+        </div>
+    </template>
+
+    <!-- Drive Document Template -->
+    <template id="drive-doc-template">
+        <div class="drive-document-card">
+            <div class="drive-doc-icon">
+                <i class="ph-fill ph-file-archive"></i>
+            </div>
+            <div class="drive-doc-info">
+                <span class="drive-doc-title">Google Drive Document</span>
+                <span class="drive-doc-meta">ID: <span class="drive-id-display"></span></span>
+            </div>
+            <div class="drive-doc-actions">
+                <button class="btn btn-secondary btn-sm view-drive-file-btn">
+                    <i class="ph ph-eye"></i> View
+                </button>
+                <a href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm open-drive-link-btn">
+                    <i class="ph ph-link"></i> Open
+                </a>
+            </div>
+        </div>
+    </template>
+
+    <!-- Drive Image Template (Similar structure, distinct icon) -->
+    <template id="drive-image-template">
+        <div class="drive-document-card drive-image-card">
+            <div class="drive-doc-icon">
+                <i class="ph-fill ph-image"></i>
+            </div>
+            <div class="drive-doc-info">
+                <span class="drive-doc-title">Google Drive Image</span>
+                <span class="drive-doc-meta">ID: <span class="drive-id-display"></span></span>
+            </div>
+            <div class="drive-doc-actions">
+                <button class="btn btn-secondary btn-sm view-drive-file-btn">
+                    <i class="ph ph-eye"></i> View
+                </button>
+                <a href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm open-drive-link-btn">
+                    <i class="ph ph-link"></i> Open
+                </a>
+            </div>
+        </div>
+    </template>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.10/purify.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>
