@@ -16,6 +16,8 @@ Google AI Studio is an excellent prototyping environment, but managing long cont
 
 Inspector solves this by parsing that raw JSON locally into a rich, searchable interface.
 
+Looking for more information? To find an exhaustive list of reasons for why you may want to use Inspector, go to: https://ai.timchinye.com/chat/1gTsxi21uaAEwa95Sl4eQ_B9HajiU3RYd.
+
 ## Key Features
 
 **Core Connectivity**
