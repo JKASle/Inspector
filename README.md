@@ -71,8 +71,6 @@ Inspector supports a flexible routing system. You can share deep links to specif
 - `https://ai-inspector.vercel.app/chat/1jpc4123XaVz3...`
 - `https://ai-inspector.vercel.app/?view=1jpc4123XaVz3...`
 
-*Note: The hash strategy (`/#/FILE_ID`) is also supported for maximum compatibility with static hosts.*
-
 ## Self-Hosting
 
 You can easily host your own version of Inspector to use a custom domain (e.g., `ai.yourname.com`). Since the application is stateless and serverless, hosting is free on platforms like Vercel, Netlify, or Render.

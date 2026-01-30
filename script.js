@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportBtn = document.getElementById('exportBtn');
     const copyCleanBtn = document.getElementById('copyCleanBtn');
     const pasteBtn = document.getElementById('pasteBtn');
-    const cinemaModeBtn = document.getElementById('cinemaModeBtn');
+    // const cinemaModeBtn = document.getElementById('cinemaModeBtn');
     const searchInput = document.getElementById('searchPrompts');
     const deepSearchToggle = document.getElementById('deepSearchToggle');
     const chatStream = document.getElementById('chat-stream');
@@ -528,7 +528,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const nameGroup = document.createElement('div');
         nameGroup.className = 'file-name-group';
-        nameGroup.innerHTML = `<i class="ph ph-file-text"></i> <span class="file-text">${truncate(file.name, 22)}</span>`;
+        nameGroup.innerHTML = `<i class="ph ph-file-text"></i> <span class="file-text" title="${file.name}">${truncate(file.name, 22)}</span>`;
         nameGroup.onclick = () => {
             updateUrl(null);
             loadFromFileRecord(file);
@@ -868,7 +868,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     driveErrorMsg.classList.remove('hidden');
                     throw new Error("Private File / HTML content");
                 }
-                handleText(text, `Drive File (${truncate(id, 10)})`);
+                handleText(text, `Drive File (${id})`);
             })
             .catch(err => {
                 if (err.name === 'AbortError') return;
