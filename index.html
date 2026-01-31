@@ -7,21 +7,24 @@
     <title>Inspector - Google AI Studio Viewer</title>
 
     <script>
-      if (window.location.protocol.startsWith('http')) {
-        document.write('<base href="/">');
-      }
+        if (window.location.protocol.startsWith('http')) {
+            document.write('<base href="/">');
+        }
     </script>
-    
+
     <link rel="icon" href="./favicon.ico" sizes="any">
     <link rel="icon" href="./favicon.svg" type="image/svg+xml">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
 
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
-    <link id="highlight-stylesheet" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/androidstudio.min.css">
+    <link id="highlight-stylesheet" rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/androidstudio.min.css">
 
     <link rel="stylesheet" href="./styles.css">
 </head>
@@ -34,7 +37,8 @@
     <div id="loading-overlay" class="hidden">
         <div class="spinner"></div>
         <div class="loading-text">Processing...</div>
-        <button id="cancel-processing-btn" class="btn btn-secondary" style="margin-top:20px; border-color:white; color:white; background:transparent;">Cancel / Stop</button>
+        <button id="cancel-processing-btn" class="btn btn-secondary"
+            style="margin-top:20px; border-color:white; color:white; background:transparent;">Cancel / Stop</button>
     </div>
 
     <!-- Image Modal -->
@@ -43,7 +47,8 @@
             <div class="text-viewer-header">
                 <span id="image-viewer-filename">Image Preview</span>
                 <div class="viewer-actions">
-                    <button id="download-image-btn" class="icon-btn" title="Download"><i class="ph ph-download-simple"></i></button>
+                    <button id="download-image-btn" class="icon-btn" title="Download"><i
+                            class="ph ph-download-simple"></i></button>
                     <button id="close-image-modal-btn" class="icon-btn"><i class="ph ph-x"></i></button>
                 </div>
             </div>
@@ -99,7 +104,8 @@
                 <img src="./favicon.svg" alt="Logo" class="logo-img">
                 <div class="brand-text">
                     <h1>Inspector</h1>
-                    <a href="https://github.com/marcelamayr/Gemini-json-Viewer" target="_blank" class="version-link">Open-source</a>
+                    <a href="https://github.com/marcelamayr/Gemini-json-Viewer" target="_blank"
+                        class="version-link">Open-source</a>
                 </div>
                 <button id="sidebar-close-btn" class="icon-btn mobile-only">
                     <i class="ph ph-x"></i>
@@ -139,26 +145,24 @@
                 <div class="separator"></div>
             </div>
 
-            <!--
             <div class="nav-label">Actions</div>
-            <button id="cinemaModeBtn" class="nav-item">
-                <i class="ph ph-play-circle"></i>
-                <span>Cinema Mode</span>
+            <button id="toggleAllCodeAction" class="nav-item">
+                <i class="ph ph-brackets-curly"></i>
+                <span>Toggle Code Blocks</span>
             </button>
-            -->
 
             <div class="nav-label mt-4">Preferences</div>
 
             <div class="sidebar-settings">
 
-                <span class="setting-title">View Mode</span>
+                <span class="setting-title">Navigation</span>
                 <div class="mode-toggle-wrapper">
-                    <span class="toggle-label text-right">Focus</span>
+                    <span class="toggle-label text-right">Turn-based</span>
                     <label class="switch">
                         <input type="checkbox" id="sidebarModeToggle">
                         <span class="slider round"></span>
                     </label>
-                    <span class="toggle-label text-left">Scroll</span>
+                    <span class="toggle-label text-left">Timeline</span>
                 </div>
 
                 <span class="setting-title" style="align-self:start; padding-top:6px;">Code Theme</span>
@@ -189,22 +193,32 @@
 
                 <span class="setting-title">Thinking</span>
                 <div class="mode-toggle-wrapper">
-                    <span class="toggle-label text-right">Collapsed</span>
+                    <span class="toggle-label text-right">Minimize</span>
                     <label class="switch">
                         <input type="checkbox" id="thinkingModeToggle">
                         <span class="slider round"></span>
                     </label>
-                    <span class="toggle-label text-left">Expanded</span>
+                    <span class="toggle-label text-left">Visible</span>
                 </div>
 
-                <span class="setting-title">Code Block</span>
+                <span class="setting-title">Code Max Height</span>
                 <div class="mode-toggle-wrapper">
-                    <span class="toggle-label text-right">Long</span>
+                    <span class="toggle-label text-right">Fluid</span>
                     <label class="switch">
                         <input type="checkbox" id="scrollableCodeToggle">
                         <span class="slider round"></span>
                     </label>
-                    <span class="toggle-label text-left">Short</span>
+                    <span class="toggle-label text-left">Fixed</span>
+                </div>
+
+                <span class="setting-title">Code State</span>
+                <div class="mode-toggle-wrapper">
+                    <span class="toggle-label text-right">Reset</span>
+                    <label class="switch">
+                        <input type="checkbox" id="codePersistenceToggle">
+                        <span class="slider round"></span>
+                    </label>
+                    <span class="toggle-label text-left">Keep</span>
                 </div>
 
                 <span class="setting-title">Code Wrap</span>
@@ -248,7 +262,8 @@
                         <i class="ph ph-download-simple"></i>
                         <span class="desktop-only">Download JSON</span>
                     </button>
-                    <button id="copyOriginalBtn" class="btn btn-secondary btn-right" title="Copy Original JSON to Clipboard">
+                    <button id="copyOriginalBtn" class="btn btn-secondary btn-right"
+                        title="Copy Original JSON to Clipboard">
                         <i class="ph ph-copy"></i>
                     </button>
                 </div>
@@ -260,7 +275,8 @@
                     <span>Share</span>
                 </div>
                 <div class="custom-tooltip">
-                    Want a 'shareable link'? This isn't a feature yet. Create a feature request or 👍 an existing one on <a href="https://github.com/marcelamayr/Gemini-json-Viewer" target="_blank">GitHub</a>!
+                    Want a 'shareable link'? This isn't a feature yet. Create a feature request or 👍 an existing one on
+                    <a href="https://github.com/marcelamayr/Gemini-json-Viewer" target="_blank">GitHub</a>!
                 </div>
             </div>
 
@@ -292,7 +308,8 @@
                     <div id="link-popover" class="hidden">
                         <div class="popover-arrow"></div>
                         <div class="popover-content">
-                            <input type="text" id="driveLinkInput" placeholder="Paste Google Drive or AI Studio Link..." autocomplete="off">
+                            <input type="text" id="driveLinkInput" placeholder="Paste Google Drive or AI Studio Link..."
+                                autocomplete="off">
                             <button id="driveLoadBtn" class="btn btn-primary btn-sm">Load</button>
                         </div>
                         <div class="popover-footer">
@@ -362,8 +379,10 @@
 
     <template id="message-tooltip-template">
         <div class="message-tooltip">
-            <button class="tooltip-btn" data-action="copy-md" title="Copy as Markdown"><i class="ph ph-markdown-logo"></i></button>
-            <button class="tooltip-btn" data-action="copy-text" title="Copy as Plain Text"><i class="ph ph-text-t"></i></button>
+            <button class="tooltip-btn" data-action="copy-md" title="Copy as Markdown"><i
+                    class="ph ph-markdown-logo"></i></button>
+            <button class="tooltip-btn" data-action="copy-text" title="Copy as Plain Text"><i
+                    class="ph ph-text-t"></i></button>
         </div>
     </template>
 
@@ -381,7 +400,8 @@
                 <button class="btn btn-secondary btn-sm view-drive-file-btn">
                     <i class="ph ph-eye"></i> View
                 </button>
-                <a href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm open-drive-link-btn">
+                <a href="#" target="_blank" rel="noopener noreferrer"
+                    class="btn btn-secondary btn-sm open-drive-link-btn">
                     <i class="ph ph-link"></i> Open
                 </a>
             </div>
@@ -402,7 +422,8 @@
                 <button class="btn btn-secondary btn-sm view-drive-file-btn">
                     <i class="ph ph-eye"></i> View
                 </button>
-                <a href="#" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm open-drive-link-btn">
+                <a href="#" target="_blank" rel="noopener noreferrer"
+                    class="btn btn-secondary btn-sm open-drive-link-btn">
                     <i class="ph ph-link"></i> Open
                 </a>
             </div>
