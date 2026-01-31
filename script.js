@@ -9,7 +9,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportBtn = document.getElementById('exportBtn');
     const copyCleanBtn = document.getElementById('copyCleanBtn');
     const pasteBtn = document.getElementById('pasteBtn');
-    const cinemaModeBtn = document.getElementById('cinemaModeBtn');
     const searchInput = document.getElementById('searchPrompts');
     const deepSearchToggle = document.getElementById('deepSearchToggle');
     const chatStream = document.getElementById('chat-stream');
@@ -20,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const scrollContainer = document.getElementById('scroll-container');
     const navWidget = document.getElementById('nav-widget');
     const loadingOverlay = document.getElementById('loading-overlay');
-    const cancelBtn = document.getElementById('cancel-processing-btn');
+    const cancelBtn = document.getElementById('cancel-processing-btn')
 
     // Image Modal
     const imageModal = document.getElementById('image-modal');
@@ -55,9 +54,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const sidebarOverlay = document.getElementById('sidebar-overlay');
     const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
     const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
+    const toggleAllCodeAction = document.getElementById('toggleAllCodeAction');
     const sidebarModeToggle = document.getElementById('sidebarModeToggle');
     const thinkingModeToggle = document.getElementById('thinkingModeToggle');
     const metadataCollapseToggle = document.getElementById('metadataCollapseToggle');
+    const codePersistenceToggle = document.getElementById('codePersistenceToggle');
     const scrollableCodeToggle = document.getElementById('scrollableCodeToggle');
     const wrapCodeToggle = document.getElementById('wrapCodeToggle');
 
@@ -87,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentFocusIndex = -1;
     let collapseThoughts = true;
     let collapseMetadataByDefault = false;
+    let preserveCodeState = false;
     let isScrollableCode = false;
     let isWrapCode = false;
     let isDeepSearch = false;
@@ -187,6 +189,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const savedMetadata = localStorage.getItem('collapseMetadata');
         collapseMetadataByDefault = savedMetadata ? JSON.parse(savedMetadata) : false;
         metadataCollapseToggle.checked = collapseMetadataByDefault;
+
+        const savedCodePersistence = localStorage.getItem('preserveCodeState');
+        preserveCodeState = savedCodePersistence ? JSON.parse(savedCodePersistence) : false;
+        codePersistenceToggle.checked = preserveCodeState;
 
         const savedScrollCode = localStorage.getItem('scrollableCode');
         isScrollableCode = savedScrollCode ? JSON.parse(savedScrollCode) : false;
@@ -689,10 +695,37 @@ document.addEventListener('DOMContentLoaded', () => {
     metadataCollapseToggle.addEventListener('change', (e) => {
         collapseMetadataByDefault = e.target.checked;
         localStorage.setItem('collapseMetadata', JSON.stringify(collapseMetadataByDefault));
+        
+        // Apply to current UI
         if (parsedData) {
             metadataBody.classList.toggle('collapsed', !collapseMetadataByDefault);
-            collapseBtn.querySelector('i').className = collapseMetadataByDefault ? 'ph ph-caret-down' : 'ph ph-caret-up';
+            const icon = collapseBtn.querySelector('i');
+            if (icon) icon.className = collapseMetadataByDefault ? 'ph ph-caret-up' : 'ph ph-caret-down';
         }
+    });
+
+    codePersistenceToggle.addEventListener('change', (e) => {
+        preserveCodeState = e.target.checked;
+        localStorage.setItem('preserveCodeState', JSON.stringify(preserveCodeState));
+        if (!preserveCodeState) {
+            localStorage.removeItem(`code_states_${currentFileName}`);
+        }
+    });
+
+    toggleAllCodeAction.addEventListener('click', () => {
+        const wrappers = document.querySelectorAll('.code-block-wrapper');
+        if (wrappers.length === 0) return;
+        const anyExpanded = Array.from(wrappers).some(w => !w.classList.contains('collapsed'));
+        wrappers.forEach(w => {
+            const isCollapsed = anyExpanded;
+            w.classList.toggle('collapsed', isCollapsed);
+            const icon = w.querySelector('.collapse-code-btn i');
+            if (icon) icon.className = isCollapsed ? 'ph ph-caret-right' : 'ph ph-caret-down';
+            
+            if (preserveCodeState && w.dataset.blockId) {
+                updatePersistedCodeState(w.dataset.blockId, isCollapsed);
+            }
+        });
     });
 
     scrollableCodeToggle.addEventListener('change', (e) => {
@@ -1110,8 +1143,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function processData() {
         fillMetadata();
         metadataPanel.classList.remove('hidden');
+        // If collapseMetadataByDefault is true (Open), remove 'collapsed'. If false (Shut), add 'collapsed'.
         metadataBody.classList.toggle('collapsed', !collapseMetadataByDefault);
-        collapseBtn.querySelector('i').className = collapseMetadataByDefault ? 'ph ph-caret-down' : 'ph ph-caret-up';
+        const icon = collapseBtn.querySelector('i');
+        if (icon) icon.className = !collapseMetadataByDefault ? 'ph ph-caret-down' : 'ph ph-caret-up';
 
         currentPrompts = [];
         const chunks = parsedData.chunkedPrompt?.chunks || [];
@@ -1550,8 +1585,17 @@ document.addEventListener('DOMContentLoaded', () => {
         loadingOverlay.classList.add('hidden');
     }
 
+    function updatePersistedCodeState(blockId, isCollapsed) {
+        const key = `code_states_${currentFileName}`;
+        let states = JSON.parse(localStorage.getItem(key) || '{}');
+        states[blockId] = isCollapsed;
+        localStorage.setItem(key, JSON.stringify(states));
+    }
+
     function postProcessCodeBlocks() {
-        document.querySelectorAll('pre code').forEach(block => {
+        const persistedStates = preserveCodeState ? JSON.parse(localStorage.getItem(`code_states_${currentFileName}`) || '{}') : {};
+        
+        document.querySelectorAll('pre code').forEach((block, idx) => {
             if (block.id === 'text-viewer-code') return;
 
             hljs.highlightElement(block);
@@ -1560,24 +1604,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const langClass = Array.from(block.classList).find(c => c.startsWith('language-'));
             if (langClass) lang = langClass.replace('language-', '');
 
-            // Fallback for undefined
             if (lang === 'undefined') lang = 'Unknown Language';
 
             const pre = block.parentElement;
             if (pre.parentElement.classList.contains('code-block-wrapper')) return;
 
+            const blockId = `b-${idx}`;
+            const isCollapsed = persistedStates[blockId] === true;
+
             const wrapper = document.createElement('div');
             wrapper.className = 'code-block-wrapper';
+            wrapper.dataset.blockId = blockId;
+            if (isCollapsed) wrapper.classList.add('collapsed');
 
             const sentinel = document.createElement('div');
             sentinel.className = 'sticky-sentinel';
 
+            const iconClass = isCollapsed ? 'ph ph-caret-right' : 'ph ph-caret-down';
             const header = document.createElement('div');
             header.className = 'code-header';
             header.innerHTML = `
                 <div class="code-title-group">
                     <button class="collapse-code-btn" title="Toggle Code">
-                        <i class="ph ph-caret-down"></i>
+                        <i class="${iconClass}"></i>
                     </button>
                     <span class="lang-tag">${lang}</span>
                 </div>
@@ -1596,9 +1645,13 @@ document.addEventListener('DOMContentLoaded', () => {
             header.querySelector('.copy-btn').addEventListener('click', () => navigator.clipboard.writeText(block.textContent).then(() => showToast("Copied to clipboard")));
             const collapseBtn = header.querySelector('.collapse-code-btn');
             collapseBtn.addEventListener('click', () => {
-                wrapper.classList.toggle('collapsed');
+                const nowCollapsed = wrapper.classList.toggle('collapsed');
                 const icon = collapseBtn.querySelector('i');
-                icon.className = wrapper.classList.contains('collapsed') ? 'ph ph-caret-right' : 'ph ph-caret-down';
+                icon.className = nowCollapsed ? 'ph ph-caret-right' : 'ph ph-caret-down';
+                
+                if (preserveCodeState) {
+                    updatePersistedCodeState(blockId, nowCollapsed);
+                }
             });
         });
     }
