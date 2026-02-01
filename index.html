@@ -12,8 +12,8 @@
         }
     </script>
 
-    <link rel="icon" href="./favicon.ico" sizes="any">
-    <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="./assets/icons/favicon.ico" sizes="any">
+    <link rel="icon" href="./assets/icons/favicon.svg" type="image/svg+xml">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -26,7 +26,7 @@
     <link id="highlight-stylesheet" rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/androidstudio.min.css">
 
-    <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./src/css/_styles.css">
 
     <!-- Vercel Web Analytics -->
     <script>
@@ -91,12 +91,14 @@
             <div class="error-body">
                 <p id="error-message-text">An error occurred.</p>
                 <div id="error-gif-container" class="hidden">
-                    <img src="./share-instruction.gif" alt="Share Settings: Anyone with link">
+                    <img src="./assets/share-instruction.gif" alt="Share Settings: Anyone with link">
                     <p>Ensure sharing is set to "Anyone with the link".</p>
                 </div>
             </div>
             <div class="error-footer">
-                <button id="close-error-btn" class="btn btn-primary btn-sm">Dismiss</button>
+                <button id="close-error-btn" class="btn btn-sm btn-secondary">Dismiss</button>
+                <button id="retry-error-btn" class="btn btn-sm btn-primary" style="position: absolute; left: 50%; translate: -50%;">Retry</button>
+                <a id="open-drive-error-btn" href="#" target="_blank" class="btn btn-secondary btn-sm hidden">Open<i class="ph ph-arrow-square-out"></i></a>
             </div>
         </div>
     </div>
@@ -124,7 +126,7 @@
     <aside id="sidebar">
         <div class="sidebar-top">
             <div class="brand">
-                <img src="./favicon.svg" alt="Logo" class="logo-img">
+                <img src="./assets/icons/favicon.svg" alt="Logo" class="logo-img">
                 <div class="brand-text">
                     <h1>Inspector</h1>
                     <a href="https://github.com/marcelamayr/Gemini-json-Viewer" target="_blank"
@@ -349,7 +351,7 @@
                             <div class="help-container">
                                 <span class="help-trigger">How to get link? <i class="ph ph-info"></i></span>
                                 <div class="gif-tooltip">
-                                    <img src="./share-instruction.gif" alt="Share Settings: Anyone with link">
+                                    <img src="./assets/share-instruction.gif" alt="Share Settings: Anyone with link">
                                     <p>Select "Anyone with the link"</p>
                                 </div>
                             </div>
@@ -469,7 +471,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
-    <script src="./script.js"></script>
+    <script src="./src/js/_script.js"></script>
 </body>
 
 </html>

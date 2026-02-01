@@ -5,7 +5,7 @@ Inspector is a UX-focused, open-source visualization tool designed for developer
 
 | Before Inspector | After Inspector |
 :-------------------------:|:-------------------------:
-<img src="./screenshot-of-raw-export.png" alt="Inspector Preview" width="384" /> | <img src="./screenshot-of-inspector-ui.png" alt="Inspector Preview" width="384" />
+<img src="./assets/screenshots/screenshot-of-raw-export.png" alt="Inspector Preview" width="384" /> | <img src="./assets/screenshots/screenshot-of-inspector-ui.png" alt="Inspector Preview" width="384" />
 
 ## Why use this?
 
@@ -20,7 +20,7 @@ Inspector solves this by parsing that raw JSON locally into a rich, searchable i
 Not enough reason? To find an exhaustive list of benefits that you get from using Inspector, go to: https://ai.timchinye.com/chat/1gTsxi21uaAEwa95Sl4eQ_B9HajiU3RYd.
 
 ### How to view an Google AI Studio raw (JSON) export file using Inspector
-<a href="https://www.youtube.com/watch?v=e4N2fiAC1XU" target="_blank"><img src="https://raw.githubusercontent.com/TimChinye/Inspector/refs/heads/main/how-to-use-thumbnail.png" alt="How to view an Google AI Studio raw (JSON) export file using Inspector" width="576" /></a>
+<a href="https://www.youtube.com/watch?v=e4N2fiAC1XU" target="_blank"><img src="./assets/screenshots/how-to-use-thumbnail.png" alt="How to view an Google AI Studio raw (JSON) export file using Inspector" width="576" /></a>
 
 ## Key Features
 
