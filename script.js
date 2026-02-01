@@ -565,14 +565,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const div = document.createElement('div');
         div.className = 'recent-file-item';
         if (file.name === currentFileName) div.classList.add('active');
+        
+        // Move click handler to parent container for better hit area
+        div.onclick = () => {
+            updateUrl(null);
+            loadFromFileRecord(file);
+        };
 
         const nameGroup = document.createElement('div');
         nameGroup.className = 'file-name-group';
         nameGroup.innerHTML = `<i class="ph ph-file-text"></i> <span class="file-text" title="${file.name}">${truncate(file.name, 22)}</span>`;
-        nameGroup.onclick = () => {
-            updateUrl(null);
-            loadFromFileRecord(file);
-        };
 
         const pinBtn = document.createElement('button');
         pinBtn.className = `pin-btn ${file.pinned ? 'pinned' : ''}`;
@@ -626,6 +628,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadFromFileRecord(record) {
+        showLoading();
         currentFileName = record.name;
         parsedData = record.data;
         rawFileContent = record.raw || JSON.stringify(record.data, null, 2);
