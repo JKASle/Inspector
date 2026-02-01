@@ -41,6 +41,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorGifContainer = document.getElementById('error-gif-container');
     const closeErrorBtn = document.getElementById('close-error-btn');
 
+    // Confirm Modal
+    const confirmModal = document.getElementById('confirm-modal');
+    const confirmMessageText = document.getElementById('confirm-message-text');
+    const confirmCancelBtn = document.getElementById('confirm-cancel-btn');
+    const confirmOkBtn = document.getElementById('confirm-ok-btn');
+
     // Link Elements
     const linkBtn = document.getElementById('linkBtn');
     const linkPopover = document.getElementById('link-popover');
@@ -98,6 +104,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let abortController = null;
     let themePreviewTimeout = null;
     let lastPreviewedTheme = null;
+    let autoRestoreContent = true;
+    
+    // Confirm Modal State
+    let onConfirmAction = null;
+    let onCancelAction = null;
 
     // --- Code Theme Data ---
     const THEMES = [{
@@ -210,6 +221,10 @@ document.addEventListener('DOMContentLoaded', () => {
         wrapCodeToggle.checked = isWrapCode;
         document.body.classList.toggle('wrap-codeblocks', isWrapCode);
 
+        const savedAutoRestore = localStorage.getItem('autoRestoreContent');
+        autoRestoreContent = savedAutoRestore !== null ? JSON.parse(savedAutoRestore) : true;
+        autoRestoreToggle.checked = autoRestoreContent;
+
         // Width Slider
         const savedWidth = localStorage.getItem('contentWidth');
         const initialWidth = savedWidth ? savedWidth : 800;
@@ -221,8 +236,9 @@ document.addEventListener('DOMContentLoaded', () => {
         else applyCodeTheme('androidstudio');
 
         // --- URL PARSING LOGIC ---
-                const urlParams = new URLSearchParams(window.location.search);
-// 1. Check Query Params
+        const urlParams = new URLSearchParams(window.location.search);
+        
+        // 1. Check Query Params
         let fileId = urlParams.get('view') || urlParams.get('id') || urlParams.get('chat');
 
         // 2. Check Hash (Static site routing: /#/id)
@@ -257,7 +273,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        if (fileId) handleDriveLink(fileId, false);
+        if (fileId) {
+            if (autoRestoreContent) {
+                handleDriveLink(fileId, false);
+            } else {
+                showConfirmModal(
+                    `Do you want to load this file (${truncate(fileId, 15)})?`, 
+                    () => handleDriveLink(fileId, false),
+                    () => updateUrl(null) // Clean URL if cancelled
+                );
+            }
+        }
     }
 
     function setTheme(theme) {
@@ -447,6 +473,7 @@ document.addEventListener('DOMContentLoaded', () => {
         request.onsuccess = (e) => {
             db = e.target.result;
             loadHistoryLists();
+            
             // Don't auto-load last file if we are loading from URL (Params, Hash, or Path)
             const urlParams = new URLSearchParams(window.location.search);
             const hasParams = urlParams.get('id') || urlParams.get('view') || urlParams.get('chat');
@@ -757,6 +784,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    autoRestoreToggle.addEventListener('change', (e) => {
+        autoRestoreContent = e.target.checked;
+        localStorage.setItem('autoRestoreContent', JSON.stringify(autoRestoreContent));
+    });
+
     fileInput.addEventListener('change', (event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -1012,6 +1044,31 @@ document.addEventListener('DOMContentLoaded', () => {
         errorGifContainer.classList.toggle('hidden', !showGif);
         errorModal.classList.remove('hidden');
     }
+
+    // Confirm Modal Logic
+    function showConfirmModal(htmlMessage, onOk, onCancel) {
+        confirmMessageText.innerHTML = htmlMessage;
+        confirmModal.classList.remove('hidden');
+        onConfirmAction = onOk;
+        onCancelAction = onCancel;
+    }
+
+    confirmOkBtn.addEventListener('click', () => {
+        if (onConfirmAction) onConfirmAction();
+        confirmModal.classList.add('hidden');
+    });
+
+    confirmCancelBtn.addEventListener('click', () => {
+        if (onCancelAction) onCancelAction();
+        confirmModal.classList.add('hidden');
+    });
+    
+    confirmModal.addEventListener('click', (e) => {
+        if (e.target === confirmModal) {
+            if (onCancelAction) onCancelAction();
+            confirmModal.classList.add('hidden');
+        }
+    });
 
     window.addEventListener('dragover', (e) => {
         e.preventDefault();
