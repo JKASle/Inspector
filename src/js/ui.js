@@ -1,7 +1,7 @@
 /* global marked, DOMPurify, hljs */
 import { prefs, CODE_THEMES } from './settings.js';
 import { truncate, showToast } from './utils.js';
-import { fetchProxyContent } from './drive.js';
+import { fetchProxyContent, fetchProxyBlob } from './drive.js';
 
 let themePreviewTimeout = null;
 let lastPreviewedTheme = null;
@@ -38,6 +38,7 @@ const els = {
     modalImg: document.getElementById('modal-img'),
     textViewerModal: document.getElementById('text-viewer-modal'),
     textViewerCode: document.getElementById('text-viewer-code'),
+    mediaModal: document.getElementById('media-modal'),
     errorModal: document.getElementById('error-modal'),
     confirmModal: document.getElementById('confirm-modal')
 };
@@ -442,6 +443,16 @@ function initModals() {
         });
     }
 
+    // Media Gallery Modal
+    const closeMediaBtn = document.getElementById('close-media-btn');
+    if (closeMediaBtn) closeMediaBtn.addEventListener('click', () => els.mediaModal.classList.add('hidden'));
+    
+    if (els.mediaModal) {
+        els.mediaModal.addEventListener('click', (e) => {
+            if(e.target === els.mediaModal) els.mediaModal.classList.add('hidden');
+        });
+    }
+
     // Error Modal
     const closeErrorBtn = document.getElementById('close-error-btn');
     if(closeErrorBtn) closeErrorBtn.addEventListener('click', () => els.errorModal.classList.add('hidden'));
@@ -522,6 +533,14 @@ export function renderMetadata(metaHtml) {
     els.metaPanel.classList.remove('hidden');
     els.metaBody.classList.toggle('collapsed', !prefs.collapseMetadataByDefault);
     els.collapseBtn.querySelector('i').className = prefs.collapseMetadataByDefault ? 'ph ph-caret-up' : 'ph ph-caret-down';
+}
+
+export function showMediaButton(show) {
+    const btn = document.getElementById('mediaGalleryBtn');
+    if(btn) {
+        if(show) btn.classList.remove('hidden');
+        else btn.classList.add('hidden');
+    }
 }
 
 export function populateSidebar(prompts, onPromptClick) {
@@ -688,6 +707,10 @@ function createMessageElement(chunks, role, id = null) {
 
     const mainChunk = chunks[0] || {};
     const isThought = mainChunk.isThought || false;
+    
+    // Check for media for Tooltip
+    const hasMedia = chunks.some(c => c.inlineData || c.inlineImage || c.driveDocument || c.driveImage);
+
     if (isThought) {
         wrapper.classList.add('thought-message');
         if (prefs.collapseThoughts) wrapper.classList.add('collapsed');
@@ -716,6 +739,7 @@ function createMessageElement(chunks, role, id = null) {
         const tooltip = tooltipTemplate.content.cloneNode(true);
         const copyMd = tooltip.querySelector('[data-action="copy-md"]');
         const copyText = tooltip.querySelector('[data-action="copy-text"]');
+        const dlMedia = tooltip.querySelector('[data-action="download-media"]');
         
         // Find the main text content for copying. Use the first chunk's text if available.
         // Note: This works because code blocks rely on the original markdown/text inside the chunk.
@@ -731,8 +755,20 @@ function createMessageElement(chunks, role, id = null) {
                 navigator.clipboard.writeText(strippedText).then(() => showToast("Copied Plain Text"));
             };
         } else {
-            // Hide tooltips if the message contains no copyable text (e.g., only images/drive links)
-            wrapper.querySelector('.message-tooltip').style.display = 'none';
+            // Hide text buttons if no text
+            copyMd.style.display = 'none';
+            copyText.style.display = 'none';
+        }
+
+        if (hasMedia && dlMedia) {
+            dlMedia.classList.remove('hidden');
+            // Trigger custom event handled in app.js or attach directly if we pass handler
+            // For now, let's attach a specific event to the wrapper that app.js can listen for
+            // Or simpler: dispatch global event
+            dlMedia.onclick = () => {
+                const event = new CustomEvent('download-message-media', { detail: { chunks } });
+                document.dispatchEvent(event);
+            };
         }
 
         wrapper.appendChild(tooltip);
@@ -830,6 +866,166 @@ function viewDriveFile(driveId) {
                  showError("Fetch Error", "Failed to fetch file content.", false, () => viewDriveFile(driveId), driveId);
             }
         });
+}
+
+// --- Media Gallery Logic ---
+
+export function renderMediaGallery(mediaItems, onDownload) {
+    const grid = document.getElementById('media-grid');
+    const countDisplay = document.getElementById('media-count-display');
+    const selectAllBtn = document.getElementById('select-all-media-btn');
+    const downloadBtn = document.getElementById('download-zip-btn');
+    const zipProgress = document.getElementById('zip-progress');
+    const zipPercent = document.getElementById('zip-percent');
+    
+    grid.innerHTML = '';
+    countDisplay.textContent = `${mediaItems.length} items`;
+    zipProgress.classList.add('hidden');
+    
+    // State for selection
+    let selectedIndices = new Set();
+    
+    mediaItems.forEach((item, idx) => {
+        const card = document.createElement('div');
+        card.className = 'media-item-card';
+        card.dataset.index = idx;
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'media-checkbox';
+        checkbox.onclick = (e) => {
+            e.stopPropagation();
+            toggleSelect(idx);
+        };
+        
+        const thumbWrapper = document.createElement('div');
+        thumbWrapper.className = 'media-thumb-wrapper';
+        thumbWrapper.onclick = () => toggleSelect(idx);
+        
+        if (item.type === 'inline') {
+            const img = document.createElement('img');
+            img.className = 'media-thumb';
+            img.src = `data:${item.mimeType};base64,${item.data}`;
+            thumbWrapper.appendChild(img);
+        } else {
+            thumbWrapper.classList.add('solid-bg');
+            const iconClass = getIconClassForExtension(item.ext);
+            const i = document.createElement('i');
+            i.className = `${iconClass} media-icon-placeholder`;
+            thumbWrapper.appendChild(i);
+        }
+
+        const body = document.createElement('div');
+        body.className = 'media-card-body';
+
+        const info = document.createElement('span');
+        info.className = 'media-info';
+        const label = item.type === 'inline' ? `Embedded ${item.ext.toUpperCase()}` : `Drive ${item.ext.toUpperCase()}`;
+        info.textContent = label;
+        info.title = item.type === 'drive' ? item.id : 'Embedded Content';
+
+        const actions = document.createElement('div');
+        actions.className = 'media-card-actions';
+
+        const retryBtn = document.createElement('button');
+        retryBtn.className = 'btn btn-secondary btn-sm';
+        retryBtn.innerHTML = 'Retry';
+        retryBtn.onclick = (e) => {
+            e.stopPropagation();
+            if (item.type === 'drive') viewDriveFile(item.id);
+            else showToast("Inline media cannot be retried");
+        };
+
+        const openBtn = document.createElement('a');
+        openBtn.className = 'btn btn-secondary btn-sm';
+        openBtn.innerHTML = 'Open <i class="ph ph-arrow-square-out"></i>';
+        openBtn.target = '_blank';
+        if (item.type === 'drive') {
+            openBtn.href = `https://drive.google.com/file/d/${item.id}`;
+        } else {
+            openBtn.href = `data:${item.mimeType};base64,${item.data}`;
+        }
+        openBtn.onclick = (e) => e.stopPropagation();
+
+        actions.appendChild(retryBtn);
+        actions.appendChild(openBtn);
+
+        body.appendChild(info);
+        body.appendChild(actions);
+
+        card.appendChild(checkbox);
+        card.appendChild(thumbWrapper);
+        card.appendChild(body);
+        
+        grid.appendChild(card);
+    });
+    
+    function toggleSelect(idx) {
+        if (selectedIndices.has(idx)) selectedIndices.delete(idx);
+        else selectedIndices.add(idx);
+        
+        const card = grid.querySelector(`.media-item-card[data-index="${idx}"]`);
+        const cb = card.querySelector('input');
+        
+        if (selectedIndices.has(idx)) {
+            card.classList.add('selected');
+            cb.checked = true;
+        } else {
+            card.classList.remove('selected');
+            cb.checked = false;
+        }
+        
+        updateButtons();
+    }
+    
+    function updateButtons() {
+        downloadBtn.textContent = `Download ZIP (${selectedIndices.size})`;
+        downloadBtn.disabled = selectedIndices.size === 0;
+        if(selectedIndices.size === 0) downloadBtn.classList.add('btn-secondary'); 
+        else downloadBtn.classList.remove('btn-secondary');
+    }
+    
+    selectAllBtn.onclick = () => {
+        const allSelected = selectedIndices.size === mediaItems.length;
+        if (allSelected) {
+            selectedIndices.clear();
+        } else {
+            mediaItems.forEach((_, idx) => selectedIndices.add(idx));
+        }
+        
+        // Re-render selection visuals
+        grid.querySelectorAll('.media-item-card').forEach((card, idx) => {
+             const cb = card.querySelector('input');
+             if (selectedIndices.has(idx)) {
+                 card.classList.add('selected');
+                 cb.checked = true;
+             } else {
+                 card.classList.remove('selected');
+                 cb.checked = false;
+             }
+        });
+        updateButtons();
+    };
+    
+    downloadBtn.onclick = () => {
+        if (selectedIndices.size === 0) return;
+        zipProgress.classList.remove('hidden');
+        zipPercent.textContent = "0%";
+        
+        const itemsToDownload = mediaItems.filter((_, i) => selectedIndices.has(i));
+        
+        onDownload(itemsToDownload, (percent) => {
+            zipPercent.textContent = `${Math.floor(percent)}%`;
+        }).then(() => {
+            zipProgress.classList.add('hidden');
+        }).catch(err => {
+            zipProgress.textContent = "Error creating ZIP";
+            console.error(err);
+        });
+    };
+
+    els.mediaModal.classList.remove('hidden');
+    updateButtons();
 }
 
 function postProcessCodeBlocks() {
@@ -957,4 +1153,52 @@ export function showConfirmModal(htmlMessage, onOk, onCancel) {
     });
 
     els.confirmModal.classList.remove('hidden');
+}
+
+function getIconClassForExtension(ext) {
+    if (!ext) return 'ph-fill ph-file';
+    switch (ext.toLowerCase()) {
+        case 'png':
+        case 'jpg':
+        case 'jpeg':
+        case 'webp':
+        case 'gif':
+        case 'bmp':
+        case 'svg':
+            return 'ph-fill ph-image';
+        case 'pdf':
+            return 'ph-fill ph-file-pdf';
+        case 'txt':
+        case 'md':
+        case 'json':
+        case 'js':
+        case 'html':
+        case 'css':
+        case 'py':
+            return 'ph-fill ph-file-text';
+        case 'zip':
+        case 'rar':
+        case '7z':
+        case 'tar':
+        case 'gz':
+            return 'ph-fill ph-file-archive';
+        case 'mp3':
+        case 'wav':
+        case 'ogg':
+            return 'ph-fill ph-file-audio';
+        case 'mp4':
+        case 'mov':
+        case 'avi':
+        case 'webm':
+            return 'ph-fill ph-file-video';
+        case 'csv':
+        case 'xls':
+        case 'xlsx':
+            return 'ph-fill ph-file-csv';
+        case 'doc':
+        case 'docx':
+            return 'ph-fill ph-file-doc';
+        default:
+            return 'ph-fill ph-file';
+    }
 }

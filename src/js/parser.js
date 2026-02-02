@@ -88,6 +88,72 @@ export function generateMetadataHTML(parsedData) {
     return { settingsHtml, sysHtml, citesHtml: finalCites };
 }
 
+export function extractMedia(parsedData) {
+    if (!parsedData || !parsedData.chunkedPrompt?.chunks) return [];
+    
+    const media = [];
+    
+    parsedData.chunkedPrompt.chunks.forEach((chunk, idx) => {
+        // 1. Inline Data (Base64) - usually User uploads
+        if (chunk.inlineData) {
+            media.push({
+                type: 'inline',
+                mimeType: chunk.inlineData.mimeType,
+                data: chunk.inlineData.data,
+                role: chunk.role,
+                index: idx,
+                ext: getExtensionFromMime(chunk.inlineData.mimeType)
+            });
+        }
+        // 2. Inline Image (Base64) - usually Model generation
+        if (chunk.inlineImage) {
+            media.push({
+                type: 'inline',
+                mimeType: chunk.inlineImage.mimeType,
+                data: chunk.inlineImage.data,
+                role: chunk.role,
+                index: idx,
+                ext: getExtensionFromMime(chunk.inlineImage.mimeType)
+            });
+        }
+        // 3. Drive Document
+        if (chunk.driveDocument) {
+            media.push({
+                type: 'drive',
+                mimeType: chunk.driveDocument.mimeType,
+                id: chunk.driveDocument.id,
+                role: chunk.role,
+                index: idx,
+                ext: getExtensionFromMime(chunk.driveDocument.mimeType)
+            });
+        }
+        // 4. Drive Image
+        if (chunk.driveImage) {
+             media.push({
+                type: 'drive',
+                mimeType: chunk.driveImage.mimeType,
+                id: chunk.driveImage.id,
+                role: chunk.role,
+                index: idx,
+                ext: getExtensionFromMime(chunk.driveImage.mimeType)
+            });
+        }
+    });
+    
+    return media;
+}
+
+function getExtensionFromMime(mime) {
+    if (!mime) return 'bin';
+    if (mime.includes('png')) return 'png';
+    if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg';
+    if (mime.includes('webp')) return 'webp';
+    if (mime.includes('gif')) return 'gif';
+    if (mime.includes('pdf')) return 'pdf';
+    if (mime.includes('text/plain')) return 'txt';
+    return mime.split('/')[1] || 'bin';
+}
+
 function formatSafetySettings(settingsArray) {
     if (!Array.isArray(settingsArray) || settingsArray.length === 0) return '<div class="safety-grid"><span style="color:var(--text-faint)">No safety settings provided.</span></div>';
 
