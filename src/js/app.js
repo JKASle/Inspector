@@ -1,7 +1,7 @@
 import { initPreferences, prefs, setTheme } from './settings.js';
 import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory } from './db.js';
-import { fetchDriveFile, parseDriveLink, cancelFetch } from './drive.js';
-import { parseConversation, generateMetadataHTML, getCleanJSON } from './parser.js';
+import { fetchDriveFile, parseDriveLink, cancelFetch, fetchProxyBlob } from './drive.js';
+import { parseConversation, generateMetadataHTML, getCleanJSON, extractMedia } from './parser.js';
 import * as UI from './ui.js';
 import { updateUrl, showToast, truncate } from './utils.js';
 
@@ -13,8 +13,10 @@ const state = {
     rawContent: null,
     isScrollMode: false,
     focusIndex: 0,
-    isDeepSearch: false
+    isDeepSearch: false,
+    extractedMedia: []
 };
+
 
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -138,6 +140,10 @@ function processAndRender() {
     // Metadata
     const meta = generateMetadataHTML(state.parsedData);
     UI.renderMetadata(meta);
+    
+    // Extract Media
+    state.extractedMedia = extractMedia(state.parsedData);
+    UI.showMediaButton(state.extractedMedia.length > 0);
     
     // Sidebar
     UI.populateSidebar(state.currentPrompts, (index) => handlePromptClick(index));
@@ -291,6 +297,24 @@ function setupEventListeners() {
         downloadString(state.rawContent, state.currentFileName, 'application/json');
     });
 
+    document.getElementById('mediaGalleryBtn').addEventListener('click', () => {
+        if (!state.extractedMedia || state.extractedMedia.length === 0) return;
+        UI.renderMediaGallery(state.extractedMedia, handleBulkDownload);
+    });
+
+    // Event listener for Tooltip Download Media button
+    document.addEventListener('download-message-media', (e) => {
+        const chunks = e.detail.chunks;
+        // Mock a parsedData structure for the extractor
+        const tempMedia = extractMedia({ chunkedPrompt: { chunks: chunks } });
+        if(tempMedia.length > 0) {
+            handleBulkDownload(tempMedia, (pct) => {
+               if(pct === 0) UI.showToast("Zipping media...");
+               if(pct === 100) UI.showToast("Download started");
+            });
+        }
+    });
+
     document.getElementById('copyOriginalBtn').addEventListener('click', () => {
         if (state.rawContent) {
             navigator.clipboard.writeText(state.rawContent).then(() => showToast("Original JSON copied"));
@@ -402,6 +426,59 @@ function setupThemeLogic() {
             text.textContent = 'Dark Mode';
         }
     });
+}
+
+// --- Bulk Download Logic ---
+async function handleBulkDownload(mediaItems, onProgress) {
+    /* global JSZip */
+    if (typeof JSZip === 'undefined') {
+        UI.showError("Missing Library", "JSZip library not loaded. Please refresh.");
+        return;
+    }
+
+    const zip = new JSZip();
+    const folder = zip.folder("media");
+    
+    let processedCount = 0;
+    const total = mediaItems.length;
+    
+    const updateProgress = () => {
+        processedCount++;
+        if(onProgress) onProgress((processedCount / total) * 50); // First 50% is fetching
+    };
+
+    const promises = mediaItems.map(async (item, i) => {
+        const filename = `${item.role}_${item.index}_${i}.${item.ext}`;
+        
+        try {
+            if (item.type === 'inline') {
+                folder.file(filename, item.data, { base64: true });
+            } else if (item.type === 'drive') {
+                const url = `https://drive.google.com/uc?export=download&id=${item.id}`;
+                const blob = await fetchProxyBlob(url);
+                folder.file(filename, blob);
+            }
+        } catch (e) {
+            console.error(`Failed to zip ${filename}`, e);
+            folder.file(`${filename}.error.txt`, `Failed to fetch: ${e.message}`);
+        } finally {
+            updateProgress();
+        }
+    });
+
+    await Promise.all(promises);
+
+    const content = await zip.generateAsync({ type: "blob" }, (metadata) => {
+        if(onProgress) onProgress(50 + (metadata.percent / 2));
+    });
+    
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(content);
+    a.download = `Media_${state.currentFileName}_${Date.now()}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    if(onProgress) onProgress(100);
 }
 
 function downloadString(content, filename, contentType) {

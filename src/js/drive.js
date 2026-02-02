@@ -29,6 +29,19 @@ export function fetchDriveFile(id, callbacks) {
         });
 }
 
+export function fetchProxyBlob(url) {
+    if (abortController) abortController.abort();
+    abortController = new AbortController();
+    
+    const proxyUrl = `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`;
+    
+    return fetch(proxyUrl, { signal: abortController.signal })
+        .then(res => {
+            if(!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.blob();
+        });
+}
+
 export function fetchProxyContent(url, onSuccess, onError) {
     if (abortController) abortController.abort();
     abortController = new AbortController();
