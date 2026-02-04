@@ -10,8 +10,8 @@ export function parseConversation(rawJson) {
     const prompts = [];
     
     chunks.forEach((chunk, index) => {
-        // Identify User Prompts (User role + has content)
-        if (chunk.role === 'user' && (chunk.text || chunk.driveDocument || chunk.driveImage)) {
+        // Identify User Prompts - logic simplified to catch ANY user content
+        if (chunk.role === 'user') {
             // Check if it's the start of a user turn (prev chunk was model or start of file)
             if (index === 0 || chunks[index - 1].role !== 'user') {
                 prompts.push({
@@ -46,10 +46,23 @@ export function getCleanJSON(parsedData) {
                 driveImage: `File ID: ${chunk.driveImage.id}`
             };
         }
+        if (chunk.driveAudio) {
+            return {
+                role: chunk.role,
+                driveAudio: `File ID: ${chunk.driveAudio.id}`
+            };
+        }
+        if (chunk.driveVideo) {
+            return {
+                role: chunk.role,
+                driveVideo: `File ID: ${chunk.driveVideo.id}`
+            };
+        }
         return {
             role: chunk.role,
             text: chunk.text
         };
+
     });
 }
 
@@ -116,26 +129,79 @@ export function extractMedia(parsedData) {
                 ext: getExtensionFromMime(chunk.inlineImage.mimeType)
             });
         }
+        if (chunk.inlineAudio) {
+            media.push({
+                type: 'inline',
+                mimeType: chunk.inlineAudio.mimeType,
+                data: chunk.inlineAudio.data,
+                role: chunk.role,
+                index: idx,
+                ext: getExtensionFromMime(chunk.inlineAudio.mimeType)
+            });
+        }
+        if (chunk.inlineFile) {
+             media.push({
+                type: 'inline',
+                mimeType: chunk.inlineFile.mimeType,
+                data: chunk.inlineFile.data,
+                role: chunk.role,
+                index: idx,
+                ext: getExtensionFromMime(chunk.inlineFile.mimeType)
+            });
+        }
         // 3. Drive Document
         if (chunk.driveDocument) {
             media.push({
                 type: 'drive',
-                mimeType: chunk.driveDocument.mimeType,
+                mimeType: chunk.driveDocument.mimeType || 'text/plain',
                 id: chunk.driveDocument.id,
                 role: chunk.role,
                 index: idx,
                 ext: getExtensionFromMime(chunk.driveDocument.mimeType)
             });
         }
+        // Generic Drive File
+        if (chunk.driveFile) {
+            media.push({
+                type: 'drive',
+                mimeType: chunk.driveFile.mimeType || 'text/plain',
+                id: chunk.driveFile.id,
+                role: chunk.role,
+                index: idx,
+                ext: getExtensionFromMime(chunk.driveFile.mimeType)
+            });
+        }
         // 4. Drive Image
         if (chunk.driveImage) {
              media.push({
                 type: 'drive',
-                mimeType: chunk.driveImage.mimeType,
+                mimeType: chunk.driveImage.mimeType || 'image/jpeg',
                 id: chunk.driveImage.id,
                 role: chunk.role,
                 index: idx,
-                ext: getExtensionFromMime(chunk.driveImage.mimeType)
+                ext: getExtensionFromMime(chunk.driveImage.mimeType || 'image/jpeg')
+            });
+        }
+        // 5. Drive Audio
+        if (chunk.driveAudio) {
+             media.push({
+                type: 'drive',
+                mimeType: chunk.driveAudio.mimeType || 'audio/mpeg',
+                id: chunk.driveAudio.id,
+                role: chunk.role,
+                index: idx,
+                ext: getExtensionFromMime(chunk.driveAudio.mimeType || 'audio/mpeg')
+            });
+        }
+        // 6. Drive Video
+        if (chunk.driveVideo) {
+             media.push({
+                type: 'drive',
+                mimeType: chunk.driveVideo.mimeType || 'video/mp4',
+                id: chunk.driveVideo.id,
+                role: chunk.role,
+                index: idx,
+                ext: getExtensionFromMime(chunk.driveVideo.mimeType || 'video/mp4')
             });
         }
     });
@@ -145,6 +211,13 @@ export function extractMedia(parsedData) {
 
 function getExtensionFromMime(mime) {
     if (!mime) return 'bin';
+    // More specific checks first
+    if (mime.includes('quicktime')) return 'mov';
+    if (mime.includes('webm')) return 'webm';
+    if (mime.includes('ogg')) return 'ogg';
+    if (mime.includes('mp4')) return 'mp4';
+    if (mime.includes('mpeg') || mime.includes('mp3')) return 'mp3';
+    if (mime.includes('wav')) return 'wav';
     if (mime.includes('png')) return 'png';
     if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg';
     if (mime.includes('webp')) return 'webp';
