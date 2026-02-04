@@ -3,6 +3,65 @@ import { prefs, CODE_THEMES } from './settings.js';
 import { truncate, showToast } from './utils.js';
 import { fetchProxyContent, fetchProxyBlob } from './drive.js';
 
+const driveAccessRegistry = JSON.parse(localStorage.getItem('driveAccessRegistry') || '{}');
+
+function saveAccess(id, status) {
+    driveAccessRegistry[id] = status;
+    localStorage.setItem('driveAccessRegistry', JSON.stringify(driveAccessRegistry));
+    
+    // Update all matching dots currently in the DOM
+    document.querySelectorAll(`.status-dot[data-id="${id}"]`).forEach(dot => {
+        dot.classList.remove('accessible', 'inaccessible');
+        dot.classList.add(status);
+    });
+}
+
+let currentViewingText = ""; // State for manual language updates
+
+function getExtensionFromMime(mime) {
+    if (!mime || mime === 'application/octet-stream' || mime === 'text/plain') {
+        // Best guess based on common ambiguous types
+        if (mime === 'text/plain') return 'txt';
+        return 'file'; 
+    }
+
+    // Helper to get display extension
+    if (mime.includes('quicktime')) return 'mov';
+    if (mime.includes('webm')) return 'webm';
+    if (mime.includes('ogg')) return 'ogg';
+    if (mime.includes('mp4')) return 'mp4';
+    if (mime.includes('mpeg') || mime.includes('mp3')) return 'mp3';
+    if (mime.includes('wav')) return 'wav';
+    if (mime.includes('png')) return 'png';
+    if (mime.includes('jpeg') || mime.includes('jpg')) return 'jpg';
+    if (mime.includes('webp')) return 'webp';
+    if (mime.includes('gif')) return 'gif';
+    if (mime.includes('pdf')) return 'pdf';
+    if (mime.includes('text/plain')) return 'txt';
+    if (mime.startsWith('audio/')) return mime.split('/')[1] || 'audio';
+    if (mime.startsWith('video/')) return mime.split('/')[1] || 'video';
+    return mime.split('/')[1] || 'bin';
+}
+
+function detectLanguageFromExtension(ext) {
+    if (!ext) return 'plaintext';
+    const map = {
+        'cs': 'csharp', 'csharp': 'csharp',
+        'js': 'javascript', 'javascript': 'javascript', 'jsx': 'javascript', 'user.js': 'javascript',
+        'xml': 'xml', 'html': 'xml', 'xhtml': 'xml',
+        'py': 'python', 'python': 'python',
+        'css': 'css',
+        'scss': 'css', 'less': 'css',
+        'json': 'json',
+        'md': 'markdown', 'markdown': 'markdown',
+        'sh': 'bash', 'bash': 'bash', 'zsh': 'bash',
+        'csv': 'plaintext', 'txt': 'plaintext'
+    };
+    
+    // If not in map, guess the extension name is the language name
+    return map[ext.toLowerCase()] || ext.toLowerCase();
+}
+
 let themePreviewTimeout = null;
 let lastPreviewedTheme = null;
 let previewShadowRoot = null;
@@ -39,6 +98,8 @@ const els = {
     textViewerModal: document.getElementById('text-viewer-modal'),
     textViewerCode: document.getElementById('text-viewer-code'),
     mediaModal: document.getElementById('media-modal'),
+    mediaPlayerModal: document.getElementById('media-player-modal'),
+    mediaPlayerContainer: document.getElementById('media-player-container'),
     errorModal: document.getElementById('error-modal'),
     confirmModal: document.getElementById('confirm-modal')
 };
@@ -453,6 +514,24 @@ function initModals() {
         });
     }
 
+    // Media Player Modal
+    const closePlayerBtn = document.getElementById('close-media-player-btn');
+    if (closePlayerBtn) {
+        closePlayerBtn.addEventListener('click', () => {
+            els.mediaPlayerModal.classList.add('hidden');
+            els.mediaPlayerContainer.innerHTML = ''; // Stop playback
+        });
+    }
+    
+    if (els.mediaPlayerModal) {
+        els.mediaPlayerModal.addEventListener('click', (e) => {
+            if (e.target === els.mediaPlayerModal) {
+                els.mediaPlayerModal.classList.add('hidden');
+                els.mediaPlayerContainer.innerHTML = ''; // Stop playback
+            }
+        });
+    }
+
     // Error Modal
     const closeErrorBtn = document.getElementById('close-error-btn');
     if(closeErrorBtn) closeErrorBtn.addEventListener('click', () => els.errorModal.classList.add('hidden'));
@@ -490,6 +569,28 @@ function initModals() {
         });
     });
     
+    const langTag = document.getElementById('text-viewer-lang-tag');
+    if (langTag) {
+        langTag.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                langTag.blur();
+            }
+        });
+        langTag.addEventListener('blur', () => {
+            const newLang = detectLanguageFromExtension(langTag.textContent.trim());
+            if (currentViewingText && newLang) {
+                try {
+                    const result = window.hljs.highlight(currentViewingText, { language: newLang, ignoreIllegals: true });
+                    els.textViewerCode.innerHTML = result.value;
+                    els.textViewerCode.className = `hljs language-${newLang}`;
+                } catch (e) {
+                    console.error("Manual highlight failed", e);
+                }
+            }
+        });
+    }
+
     if (els.collapseBtn) {
         els.collapseBtn.addEventListener('click', () => {
             els.metaBody.classList.toggle('collapsed');
@@ -709,7 +810,7 @@ function createMessageElement(chunks, role, id = null) {
     const isThought = mainChunk.isThought || false;
     
     // Check for media for Tooltip
-    const hasMedia = chunks.some(c => c.inlineData || c.inlineImage || c.driveDocument || c.driveImage);
+    const hasMedia = chunks.some(c => c.inlineData || c.inlineImage || c.driveDocument || c.driveImage || c.driveVideo || c.driveAudio);
 
     if (isThought) {
         wrapper.classList.add('thought-message');
@@ -807,18 +908,109 @@ function createMessageElement(chunks, role, id = null) {
                 };
             }
             contentContainer.querySelectorAll('a').forEach(a => a.setAttribute('target', '_blank'));
-        } 
-        else if (chunk.driveDocument || chunk.driveImage) {
-            const templateId = chunk.driveDocument ? 'drive-doc-template' : 'drive-image-template';
+        }
+        else if (chunk.inlineFile) {
+            contentContainer = document.createElement('div');
+            contentContainer.className = 'message-bubble inline-file-bubble';
+            contentContainer.style.alignSelf = 'flex-start';
+
+            const mimeType = chunk.inlineFile.mimeType || '';
+            const dataUrl = `data:${mimeType};base64,${chunk.inlineFile.data}`;
+
+            if (mimeType.startsWith('image/')) {
+                const img = document.createElement('img');
+                img.src = dataUrl;
+                img.style.maxWidth = '100%';
+                img.style.borderRadius = 'var(--radius-sm)';
+                contentContainer.appendChild(img);
+            } else if (mimeType.startsWith('video/')) {
+                const video = document.createElement('video');
+                video.src = dataUrl;
+                video.controls = true;
+                video.style.maxWidth = '100%';
+                video.style.borderRadius = 'var(--radius-sm)';
+                contentContainer.appendChild(video);
+            } else if (mimeType.startsWith('audio/')) {
+                const audio = document.createElement('audio');
+                audio.src = dataUrl;
+                audio.controls = true;
+                audio.style.width = '100%';
+                contentContainer.appendChild(audio);
+            } else {
+                // Text/Code handling
+                const pre = document.createElement('pre');
+                const code = document.createElement('code');
+                
+                try {
+                    const binaryString = window.atob(chunk.inlineFile.data);
+                    const decodedText = new TextDecoder().decode(Uint8Array.from(binaryString, c => c.charCodeAt(0)));
+                    const ext = getExtensionFromMime(mimeType);
+                    const lang = detectLanguageFromExtension(ext) || 'plaintext';
+                    
+                    code.className = `language-${lang}`;
+                    code.textContent = decodedText; 
+                    pre.appendChild(code);
+                    contentContainer.appendChild(pre);
+                    
+                    // Mark this wrapper so postProcessCodeBlocks can add the Expand button
+                    contentContainer.dataset.inlineData = chunk.inlineFile.data;
+                    contentContainer.dataset.mimeType = mimeType;
+                } catch (e) {
+                    contentContainer.textContent = "[Binary File]";
+                }
+            }
+
+            if (mimeType.startsWith('image/')) {
+                contentContainer.style.cursor = 'zoom-in';
+                contentContainer.onclick = () => viewInlineFile(chunk.inlineFile.data, mimeType);
+            }
+        }
+        else if (chunk.inlineAudio) {
+            contentContainer = document.createElement('div');
+            contentContainer.className = 'message-bubble';
+            const audioButton = document.createElement('button');
+            audioButton.className = 'btn btn-secondary';
+            audioButton.innerHTML = '<i class="ph ph-play"></i> Play Inline Audio';
+            audioButton.addEventListener('click', () => {
+                const audioSrc = `data:${chunk.inlineAudio.mimeType};base64,${chunk.inlineAudio.data}`;
+                showMediaPlayer(audioSrc, chunk.inlineAudio.mimeType);
+            });
+            contentContainer.appendChild(audioButton);
+        }
+else if (chunk.driveDocument || chunk.driveImage || chunk.driveAudio || chunk.driveVideo || chunk.driveFile) {
+            let templateId = 'drive-doc-template';
+            let driveId = null;
+            const driveData = chunk.driveDocument || chunk.driveImage || chunk.driveAudio || chunk.driveVideo || chunk.driveFile;
+            
+            // Primary Mime Detection: Key-based override
+            let mimeType = driveData.mimeType || '';
+            if (chunk.driveImage && !mimeType.startsWith('image/')) mimeType = 'image/jpeg';
+            if (chunk.driveAudio && !mimeType.startsWith('audio/')) mimeType = 'audio/mpeg';
+            if (chunk.driveVideo && !mimeType.startsWith('video/')) mimeType = 'video/mp4';
+            
+            if (mimeType.startsWith('image/') || chunk.driveImage) templateId = 'drive-image-template';
+            else if (mimeType.startsWith('audio/') || chunk.driveAudio) templateId = 'drive-audio-template';
+            else if (mimeType.startsWith('video/') || chunk.driveVideo) templateId = 'drive-video-template';
+            
+            driveId = driveData.id;
+
             const template = document.getElementById(templateId);
             if(template) {
                 contentContainer = template.content.cloneNode(true).firstElementChild;
-                const driveId = chunk.driveDocument?.id || chunk.driveImage?.id;
-                
+                const ext = getExtensionFromMime(mimeType).toUpperCase();
+
+                contentContainer.querySelector('.drive-doc-type').textContent = ext;
                 contentContainer.querySelector('.drive-id-display').textContent = truncate(driveId, 15);
                 contentContainer.querySelector('.drive-id-display').title = driveId;
+                
+                const dot = contentContainer.querySelector('.status-dot');
+                if (dot) {
+                    dot.dataset.id = driveId;
+                    if (driveAccessRegistry[driveId]) dot.classList.add(driveAccessRegistry[driveId]);
+                }
+
                 contentContainer.querySelector('.open-drive-link-btn').href = `https://drive.google.com/file/d/${driveId}`;
-                contentContainer.querySelector('.view-drive-file-btn').onclick = () => viewDriveFile(driveId);
+                contentContainer.querySelector('.view-drive-file-btn').onclick = (e) => viewDriveFile(driveId, e.currentTarget, mimeType);
             }
         }
 
@@ -828,44 +1020,230 @@ function createMessageElement(chunks, role, id = null) {
     return wrapper;
 }
 
-function viewDriveFile(driveId) {
+function viewInlineFile(base64Data, mimeType) {
     showLoading();
-    const originalUrl = `https://drive.google.com/uc?export=download&id=${driveId}`;
-    
-    fetchProxyContent(originalUrl)
-        .then(async response => {
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.startsWith('image/')) {
-                const blob = await response.blob();
-                els.modalImg.src = URL.createObjectURL(blob);
+
+    try {
+        if (mimeType.startsWith('image/') || mimeType.startsWith('video/') || mimeType.startsWith('audio/')) {
+            const dataUrl = `data:${mimeType};base64,${base64Data}`;
+            if (mimeType.startsWith('image/')) {
+                els.modalImg.src = dataUrl;
+                document.getElementById('image-viewer-filename').textContent = "Inline Image";
                 els.imageModal.classList.remove('hidden');
             } else {
-                const text = await response.text();
-                if (text.trim().startsWith('<')) throw new Error("Private File / HTML response");
-                
-                const highlightResult = window.hljs.highlightAuto(text);
-                const detectedLanguage = highlightResult.language || 'Plain Text';
-                
-                document.getElementById('text-viewer-filename').textContent = `Drive File: ${truncate(driveId, 15)}`;
-                document.getElementById('text-viewer-lang-tag').textContent = detectedLanguage;
-                els.textViewerCode.textContent = text;
-                els.textViewerCode.className = `hljs language-${detectedLanguage}`;
-                window.hljs.highlightElement(els.textViewerCode);
-                
-                const pre = els.textViewerModal.querySelector('pre');
-                pre.classList.toggle('wrapped', prefs.isWrapCode);
-                els.textViewerModal.classList.remove('hidden');
+                showMediaPlayer(dataUrl, mimeType);
             }
+        } else {
+            // Assume text-based content
+            const binaryString = window.atob(base64Data);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            const decodedText = new TextDecoder().decode(bytes);
+            currentViewingText = decodedText;
+
+            const ext = getExtensionFromMime(mimeType);
+            const explicitLang = detectLanguageFromExtension(ext);
+            let detectedLanguage = explicitLang || 'plaintext';
+
+            try {
+                const result = window.hljs.highlight(decodedText, { language: detectedLanguage, ignoreIllegals: true });
+                els.textViewerCode.innerHTML = result.value;
+            } catch (e) {
+                const auto = window.hljs.highlightAuto(decodedText);
+                detectedLanguage = auto.language || 'plaintext';
+                els.textViewerCode.innerHTML = auto.value;
+            }
+            
+            document.getElementById('text-viewer-filename').textContent = `Inline File (${ext})`;
+            document.getElementById('text-viewer-lang-tag').textContent = detectedLanguage;
+            els.textViewerCode.className = `hljs language-${detectedLanguage}`;
+
+            els.textViewerModal.classList.remove('hidden');
+        }
+    } catch (e) {
+        console.error("Failed to view inline file:", e);
+        showError("Display Error", "Could not decode or display the inline file content.");
+    } finally {
+        hideLoading();
+    }
+}
+
+function viewDriveFile(driveId, element, knownMimeType) {
+    showLoading();
+    const card = element ? element.closest('.drive-document-card, .media-item-card') : null;
+    const dot = card ? card.querySelector('.status-dot') : null;
+
+    if (dot) {
+        dot.dataset.id = driveId;
+        dot.classList.remove('accessible', 'inaccessible');
+    }
+
+    // Context-aware media detection: Check MIME first, then fall back to Card Type
+    const isMedia = (knownMimeType && (
+        knownMimeType.startsWith('image/') || 
+        knownMimeType.startsWith('video/') || 
+        knownMimeType.startsWith('audio/') ||
+        knownMimeType.includes('quicktime') ||
+        knownMimeType.includes('video') || 
+        knownMimeType.includes('audio')
+    )) || (card && (
+        card.classList.contains('drive-video-card') || 
+        card.classList.contains('drive-audio-card') || 
+        card.classList.contains('drive-image-card')
+    ));
+
+    if (knownMimeType === 'application/pdf') {
+        hideLoading();
+        showError("Preview Unavailable", "PDF files cannot be previewed directly. Please use the 'Open' button.", false, null, driveId);
+        if (dot) dot.classList.add('inaccessible');
+        return;
+    }
+
+    const originalUrl = `https://drive.google.com/uc?export=download&id=${driveId}`;
+
+    // If it's media, we fetch as blob and force the media players
+    if (isMedia) {
+        fetchProxyBlob(originalUrl)
+            .then(blob => {
+                hideLoading();
+                if (blob.type.includes('text/html')) throw new Error("Private File");
+
+                const url = URL.createObjectURL(blob);
+                if (knownMimeType.startsWith('image/')) {
+                    els.modalImg.src = url;
+                    document.getElementById('image-viewer-filename').textContent = "Image Preview";
+                    els.imageModal.classList.remove('hidden');
+                } else {
+                    showMediaPlayer(url, knownMimeType);
+                }
+                saveAccess(driveId, 'accessible');
+            })
+            .catch(err => {
+                hideLoading();
+                saveAccess(driveId, 'inaccessible');
+                showError("Access Denied", "Could not access media. Ensure the file is shared with 'Anyone with the link'.", true, () => viewDriveFile(driveId, element, knownMimeType), driveId);
+            });
+        return;
+    }
+
+    // 2. Fallback / Text Handling
+    fetchProxyContent(originalUrl)
+        .then(async response => {
             hideLoading();
+            const contentType = response.headers.get('content-type') || '';
+            const finalMime = knownMimeType || contentType;
+
+            // Strict block: if network headers reveal it's media we missed, route it and STOP text processing
+            if (finalMime.startsWith('image/') || finalMime.startsWith('video/') || finalMime.startsWith('audio/')) {
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                if (finalMime.startsWith('image/')) {
+                    els.modalImg.src = url;
+                    els.imageModal.classList.remove('hidden');
+                } else {
+                    showMediaPlayer(url, finalMime);
+                }
+                saveAccess(driveId, 'accessible');
+                return;
+            }
+
+            const text = await response.text();
+            
+            // Handle Google Drive Virus Scan Warning (Interstitial for >100MB files)
+            const isHtmlResponse = text.trim().startsWith('<');
+            if (isHtmlResponse && text.includes('Virus scan warning')) {
+                const match = text.match(/href="([^"]+confirm=[^"]+)"/);
+                if (match) {
+                    const confirmUrl = match[1].replace(/&amp;/g, '&');
+                    // Recurse using the confirmation URL
+                    return fetchProxyContent(confirmUrl).then(async res => {
+                        const newText = await res.text();
+                        return processDriveText(newText, driveId, element, knownMimeType, dot, res.headers.get('content-type') || knownMimeType);
+                    });
+                }
+            }
+
+            // Check if response is a Google Login/Auth page
+            const lower = text.toLowerCase();
+            const isGoogleAuth = isHtmlResponse && (lower.includes('accounts.google.com') || lower.includes('sign in - google') || (lower.includes('google') && lower.includes('service=wise')));
+
+            if (isGoogleAuth) throw new Error("Private File");
+
+            // Binary check: If we find null bytes or control chars in the first 100 chars, it's not text
+            if (/[\x00-\x08\x0E\x0F]/.test(text.slice(0, 100))) {
+                showError("Preview Unavailable", "This file type contains binary data and cannot be viewed as text.", false, null, driveId);
+                return;
+            }
+
+            currentViewingText = text;
+            const ext = getExtensionFromMime(finalMime);
+            const explicitLang = detectLanguageFromExtension(ext);
+            let detectedLanguage = explicitLang || 'plaintext';
+
+            try {
+                const result = window.hljs.highlight(text, { language: detectedLanguage, ignoreIllegals: true });
+                els.textViewerCode.innerHTML = result.value;
+            } catch (e) {
+                const auto = window.hljs.highlightAuto(text);
+                detectedLanguage = auto.language || 'plaintext';
+                els.textViewerCode.innerHTML = auto.value;
+            }
+
+            document.getElementById('text-viewer-filename').textContent = `File: ${truncate(driveId, 15)} (${ext})`;
+            document.getElementById('text-viewer-lang-tag').textContent = detectedLanguage;
+            els.textViewerCode.className = `hljs language-${detectedLanguage}`;
+            
+            const pre = els.textViewerModal.querySelector('pre');
+            pre.classList.toggle('wrapped', prefs.isWrapCode);
+            els.textViewerModal.classList.remove('hidden');
+            saveAccess(driveId, 'accessible');
         })
         .catch(err => {
             hideLoading();
-            if (err.message === "Private File / HTML response") {
-                 showError("Access Denied", "This file is private.", true, () => viewDriveFile(driveId), driveId);
+            saveAccess(driveId, 'inaccessible');
+            if (err.message === "Private File") {
+                showError("Access Denied", "This file is private.", true, () => viewDriveFile(driveId, element, knownMimeType), driveId);
             } else {
-                 showError("Fetch Error", "Failed to fetch file content.", false, () => viewDriveFile(driveId), driveId);
+                showError("Error", "Failed to fetch file content.", false, null, driveId);
             }
         });
+}
+
+function showMediaPlayer(url, contentType) {
+    const container = els.mediaPlayerContainer;
+    container.innerHTML = '';
+    let mediaElement;
+
+    if (contentType.startsWith('audio/')) {
+        const audioContainer = document.createElement('div');
+        audioContainer.className = 'audio-player-container';
+        audioContainer.innerHTML = `<i class="ph-fill ph-speaker-high" style="font-size: 64px; color: var(--text-muted); margin-bottom: 20px;"></i>`;
+        
+        mediaElement = document.createElement('audio');
+        mediaElement.controls = true;
+        mediaElement.autoplay = true;
+        mediaElement.style.width = '100%';
+        
+        audioContainer.appendChild(mediaElement);
+        container.appendChild(audioContainer);
+        document.getElementById('media-player-filename').textContent = "Audio Player";
+    } else if (contentType.startsWith('video/')) {
+        mediaElement = document.createElement('video');
+        mediaElement.controls = true;
+        mediaElement.autoplay = true;
+        mediaElement.style.maxWidth = '100%';
+        mediaElement.style.maxHeight = '100%';
+        container.appendChild(mediaElement);
+        document.getElementById('media-player-filename').textContent = "Video Player";
+    }
+
+    if (mediaElement) {
+        mediaElement.src = url;
+        els.mediaPlayerModal.classList.remove('hidden');
+    }
 }
 
 // --- Media Gallery Logic ---
@@ -901,15 +1279,25 @@ export function renderMediaGallery(mediaItems, onDownload) {
         const thumbWrapper = document.createElement('div');
         thumbWrapper.className = 'media-thumb-wrapper';
         thumbWrapper.onclick = () => toggleSelect(idx);
+
+        if (item.type === 'drive') {
+            const dot = document.createElement('div');
+            dot.className = 'status-dot';
+            dot.dataset.id = item.id;
+            if (driveAccessRegistry[item.id]) dot.classList.add(driveAccessRegistry[item.id]);
+            thumbWrapper.appendChild(dot);
+        }
         
-        if (item.type === 'inline') {
+        if (item.type === 'inline' && item.mimeType.startsWith('image/')) {
             const img = document.createElement('img');
             img.className = 'media-thumb';
             img.src = `data:${item.mimeType};base64,${item.data}`;
             thumbWrapper.appendChild(img);
         } else {
             thumbWrapper.classList.add('solid-bg');
-            const iconClass = getIconClassForExtension(item.ext);
+            // Check mimeType if available from extractMedia, otherwise guess from extension
+            const mime = item.mimeType || '';
+            const iconClass = getIconClassForExtension(item.ext, mime);
             const i = document.createElement('i');
             i.className = `${iconClass} media-icon-placeholder`;
             thumbWrapper.appendChild(i);
@@ -927,13 +1315,16 @@ export function renderMediaGallery(mediaItems, onDownload) {
         const actions = document.createElement('div');
         actions.className = 'media-card-actions';
 
-        const retryBtn = document.createElement('button');
-        retryBtn.className = 'btn btn-secondary btn-sm';
-        retryBtn.innerHTML = 'Retry';
-        retryBtn.onclick = (e) => {
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'btn btn-secondary btn-sm';
+        viewBtn.innerHTML = '<i class="ph ph-eye"></i> View';
+        viewBtn.onclick = (e) => {
             e.stopPropagation();
-            if (item.type === 'drive') viewDriveFile(item.id);
-            else showToast("Inline media cannot be retried");
+            if (item.type === 'drive') {
+                viewDriveFile(item.id, card, item.mimeType);
+            } else {
+                viewInlineFile(item.data, item.mimeType);
+            }
         };
 
         const openBtn = document.createElement('a');
@@ -942,13 +1333,11 @@ export function renderMediaGallery(mediaItems, onDownload) {
         openBtn.target = '_blank';
         if (item.type === 'drive') {
             openBtn.href = `https://drive.google.com/file/d/${item.id}`;
-        } else {
-            openBtn.href = `data:${item.mimeType};base64,${item.data}`;
+            openBtn.onclick = (e) => e.stopPropagation();
+            actions.appendChild(openBtn);
         }
-        openBtn.onclick = (e) => e.stopPropagation();
 
-        actions.appendChild(retryBtn);
-        actions.appendChild(openBtn);
+        actions.appendChild(viewBtn);
 
         body.appendChild(info);
         body.appendChild(actions);
@@ -1058,6 +1447,9 @@ function postProcessCodeBlocks() {
         const iconClass = isCollapsed ? 'ph ph-caret-right' : 'ph ph-caret-down';
         const header = document.createElement('div');
         header.className = 'code-header';
+        const inlineBubble = pre.closest('.inline-file-bubble');
+        const expandBtnHtml = inlineBubble ? `<button class="expand-inline-btn"><i class="ph ph-arrows-out"></i> Full View</button>` : '';
+
         header.innerHTML = `
             <div class="code-title-group">
                 <button class="collapse-code-btn" title="Toggle Code">
@@ -1065,10 +1457,19 @@ function postProcessCodeBlocks() {
                 </button>
                 <span class="lang-tag">${lang}</span>
             </div>
-            <button class="copy-btn"><i class="ph ph-copy"></i> Copy</button>
+            <div style="display:flex; align-items:center;">
+                ${expandBtnHtml}
+                <button class="copy-btn"><i class="ph ph-copy"></i> Copy</button>
+            </div>
         `;
 
         pre.parentNode.insertBefore(wrapper, pre);
+
+        if (inlineBubble && expandBtnHtml) {
+            header.querySelector('.expand-inline-btn').onclick = () => {
+                viewInlineFile(inlineBubble.dataset.inlineData, inlineBubble.dataset.mimeType);
+            };
+        }
         wrapper.appendChild(sentinel);
         wrapper.appendChild(header);
         wrapper.appendChild(pre);
@@ -1155,8 +1556,14 @@ export function showConfirmModal(htmlMessage, onOk, onCancel) {
     els.confirmModal.classList.remove('hidden');
 }
 
-function getIconClassForExtension(ext) {
+function getIconClassForExtension(ext, mimeType = '') {
     if (!ext) return 'ph-fill ph-file';
+
+    // Check mimeType first if valid
+    if (mimeType.startsWith('video/')) return 'ph-fill ph-film-strip';
+    if (mimeType.startsWith('audio/')) return 'ph-fill ph-speaker-high';
+    if (mimeType.startsWith('image/')) return 'ph-fill ph-image';
+
     switch (ext.toLowerCase()) {
         case 'png':
         case 'jpg':
@@ -1185,12 +1592,16 @@ function getIconClassForExtension(ext) {
         case 'mp3':
         case 'wav':
         case 'ogg':
-            return 'ph-fill ph-file-audio';
+        case 'flac':
+        case 'm4a':
+        case 'aac':
+            return 'ph-fill ph-speaker-high';
         case 'mp4':
         case 'mov':
         case 'avi':
         case 'webm':
-            return 'ph-fill ph-file-video';
+        case 'mkv':
+            return 'ph-fill ph-film-strip';
         case 'csv':
         case 'xls':
         case 'xlsx':
