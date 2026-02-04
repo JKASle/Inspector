@@ -154,7 +154,11 @@ function processAndRender() {
     document.getElementById('nav-widget').classList.remove('hidden');
 
     // Render first turn
-    renderChat(0);
+    if (state.currentPrompts.length > 0) {
+        renderChat(0);
+    } else {
+        UI.renderFullConversation(state.parsedData, []);
+    }
 }
 
 function handlePromptClick(index) {

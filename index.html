@@ -73,7 +73,7 @@
             <div class="text-viewer-header">
                 <div class="viewer-title-group">
                     <span id="text-viewer-filename">File Content</span>
-                    <span id="text-viewer-lang-tag" class="viewer-lang-tag"></span>
+                    <span id="text-viewer-lang-tag" class="viewer-lang-tag" contenteditable="true" title="Click to change language/extension"></span>
                 </div>
                 <div class="viewer-actions">
                     <button id="copy-viewer-btn" class="copy-btn"><i class="ph ph-copy"></i> Copy</button>
@@ -144,6 +144,21 @@
             </div>
             <div id="zip-progress" class="hidden" style="padding: 10px; text-align: center; background: var(--bg-surface); border-top: 1px solid var(--border-subtle);">
                 Preparing ZIP... <span id="zip-percent">0%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Media Player Modal -->
+    <div id="media-player-modal" class="hidden">
+        <div class="modal-content media-player-content">
+            <div class="text-viewer-header">
+                <span id="media-player-filename">Media Player</span>
+                <div class="viewer-actions">
+                    <button id="close-media-player-btn" class="icon-btn"><i class="ph ph-x"></i></button>
+                </div>
+            </div>
+            <div id="media-player-container">
+                <!-- video or audio tag goes here -->
             </div>
         </div>
     </div>
@@ -326,18 +341,13 @@
                         <span class="desktop-only">Download JSON</span>
                     </button>
                     <button id="copyOriginalBtn" class="btn btn-secondary btn-right"
-                        title="Copy Original JSON to Clipboard">
-                        <i class="ph ph-copy"></i>
-                    </button>
-                </div>
-                
-                <button id="mediaGalleryBtn" class="btn btn-secondary hidden" style="margin-right: 12px;">
-                    <i class="ph ph-images"></i>
-                    <span class="desktop-only">Media</span>
+                    title="Copy Original JSON to Clipboard">
+                    <i class="ph ph-copy"></i>
                 </button>
             </div>
+        </div>
 
-            <div id="shareBtnWrapper">
+        <div id="shareBtnWrapper">
                 <div id="shareBtn" class="btn btn-secondary disabled-feature">
                     <i class="ph ph-share-network"></i>
                     <span>Share</span>
@@ -438,6 +448,10 @@
             <button id="scroll-bottom" title="Bottom of View"><i class="ph ph-arrow-line-down"></i></button>
         </div>
 
+        <div id="media-widget" class="hidden">
+            <button id="mediaGalleryBtn" title="Media Gallery"><i class="ph ph-images"></i></button>
+        </div>
+
     </main>
 
     <div id="toast" class="toast">
@@ -456,15 +470,15 @@
         </div>
     </template>
 
-    <!-- Drive Document Template -->
     <template id="drive-doc-template">
         <div class="drive-document-card">
             <div class="drive-doc-icon">
-                <i class="ph-fill ph-file-archive"></i>
+                <i class="ph-fill ph-file-text"></i>
+                <div class="status-dot"></div>
             </div>
             <div class="drive-doc-info">
                 <span class="drive-doc-title">Google Drive Document</span>
-                <span class="drive-doc-meta">ID: <span class="drive-id-display"></span></span>
+                <span class="drive-doc-meta"><span class="drive-doc-type">FILE</span> &bull; ID: <span class="drive-id-display"></span></span>
             </div>
             <div class="drive-doc-actions">
                 <button class="btn btn-secondary btn-sm view-drive-file-btn">
@@ -483,10 +497,11 @@
         <div class="drive-document-card drive-image-card">
             <div class="drive-doc-icon">
                 <i class="ph-fill ph-image"></i>
+                <div class="status-dot"></div>
             </div>
             <div class="drive-doc-info">
                 <span class="drive-doc-title">Google Drive Image</span>
-                <span class="drive-doc-meta">ID: <span class="drive-id-display"></span></span>
+                <span class="drive-doc-meta"><span class="drive-doc-type">IMAGE</span> &bull; ID: <span class="drive-id-display"></span></span>
             </div>
             <div class="drive-doc-actions">
                 <button class="btn btn-secondary btn-sm view-drive-file-btn">
@@ -500,12 +515,65 @@
         </div>
     </template>
 
+    <!-- Drive Video Template -->
+    <template id="drive-video-template">
+        <div class="drive-document-card drive-video-card">
+            <div class="drive-doc-icon">
+                <i class="ph-fill ph-film-strip"></i>
+                <div class="status-dot"></div>
+            </div>
+            <div class="drive-doc-info">
+                <span class="drive-doc-title">Google Drive Video</span>
+                <span class="drive-doc-meta"><span class="drive-doc-type">VIDEO</span> &bull; ID: <span class="drive-id-display"></span></span>
+            </div>
+            <div class="drive-doc-actions">
+                <button class="btn btn-secondary btn-sm view-drive-file-btn">
+                    <i class="ph ph-play"></i> Play
+                </button>
+                <a href="#" target="_blank" rel="noopener noreferrer"
+                    class="btn btn-secondary btn-sm open-drive-link-btn">
+                    <i class="ph ph-link"></i> Open
+                </a>
+            </div>
+        </div>
+    </template>
+
+    <!-- Drive Audio Template -->
+    <template id="drive-audio-template">
+        <div class="drive-document-card drive-audio-card">
+            <div class="drive-doc-icon">
+                <i class="ph-fill ph-speaker-high"></i>
+                <div class="status-dot"></div>
+            </div>
+            <div class="drive-doc-info">
+                <span class="drive-doc-title">Google Drive Audio</span>
+                <span class="drive-doc-meta"><span class="drive-doc-type">AUDIO</span> &bull; ID: <span class="drive-id-display"></span></span>
+            </div>
+            <div class="drive-doc-actions">
+                <button class="btn btn-secondary btn-sm view-drive-file-btn">
+                    <i class="ph ph-play"></i> Play
+                </button>
+                <a href="#" target="_blank" rel="noopener noreferrer"
+                    class="btn btn-secondary btn-sm open-drive-link-btn">
+                    <i class="ph ph-link"></i> Open
+                </a>
+            </div>
+        </div>
+    </template>
+
+
+
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.10/purify.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/csharp.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/markdown.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/xml.min.js"></script>
     <script type="module" src="./src/js/app.js"></script>
 </body>
 

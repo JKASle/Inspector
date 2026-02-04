@@ -59,9 +59,47 @@
     align-items: flex-end; /* Align bubbles to right by default */
 }
 
-/* Align Drive Document Card to the left of the user wrapper */
-.user-content-wrapper .drive-document-card {
+/* Align cards and inline files to the left of the user wrapper area */
+.user-content-wrapper .drive-document-card, 
+.user-content-wrapper .inline-file-bubble {
     align-self: flex-start;
+    width: fit-content;
+}
+
+.inline-file-bubble {
+    padding: 8px !important;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    max-width: 90%;
+}
+
+.inline-file-bubble pre {
+    margin: 0;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 11px;
+}
+
+.inline-file-bubble .code-block-wrapper {
+    margin: 0;
+}
+
+/* Specific button for expanding inline code */
+.expand-inline-btn {
+    background: transparent;
+    border: 1px solid #475569;
+    color: #cbd5e1;
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-right: 8px;
+}
+
+.expand-inline-btn:hover {
+    background: #334155;
+    color: white;
 }
 
 /* Standard user text bubbles remain right-aligned within wrapper (or full width of wrapper) */
@@ -216,6 +254,7 @@
 }
 
 .drive-doc-icon {
+    position: relative;
     font-size: 24px;
     color: var(--text-muted);
     background: var(--bg-app);
@@ -226,6 +265,26 @@
     justify-content: center;
     border-radius: var(--radius-sm);
     flex-shrink: 0;
+}
+
+.status-dot {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--text-faint);
+    border: 2px solid var(--bg-surface);
+    transition: background-color 0.2s;
+}
+
+.status-dot.accessible {
+    background-color: #22c55e;
+}
+
+.status-dot.inaccessible {
+    background-color: #ef4444;
 }
 
 .drive-doc-info {
@@ -275,7 +334,7 @@
     border-bottom: 1px solid var(--border-subtle);
     position: sticky;
     top: 0;
-    z-index: 20;
+    z-index: 10;
     border-top-left-radius: var(--radius-md);
     border-top-right-radius: var(--radius-md);
     transition: border-radius 0.2s;
