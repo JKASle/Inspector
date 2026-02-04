@@ -241,6 +241,7 @@
 
 .drive-doc-meta {
     font-size: 12px;
+    max-width: 24ch;
     color: var(--text-muted);
     font-family: var(--font-mono);
     white-space: nowrap;
