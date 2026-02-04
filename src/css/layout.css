@@ -442,6 +442,7 @@ button.search-toggle.active {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 24ch;
 }
 
 .toolbar-actions {
