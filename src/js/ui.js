@@ -659,15 +659,17 @@ export function updateRenamingUI(name, driveId = null) {
 
     scrapeBtn.classList.toggle('hidden', !driveId);
 
-    if (driveId) {
+    if (driveId && typeof driveId === 'string') {
         container.classList.add('has-id');
         popover.classList.remove('hidden');
         
         openBtn.href = `https://aistudio.google.com/prompts/${driveId}`;
+        openBtn.title = `https://aistudio.google.com/prompts/${driveId}`;
         
         // Remove old listener to prevent duplicates
         const newCopyBtn = copyBtn.cloneNode(true);
         copyBtn.parentNode.replaceChild(newCopyBtn, copyBtn);
+        newCopyBtn.title = driveId;
         
         newCopyBtn.addEventListener('click', () => {
             navigator.clipboard.writeText(driveId).then(() => showToast("ID copied to clipboard"));
@@ -757,7 +759,7 @@ export function showConflictResolver(currentName, existingFile, onRenameAnyways,
     document.getElementById('open-conflicting-btn').onclick = () => {
         els.errorModal.classList.add('hidden');
         conflictSection.classList.add('hidden');
-        showToast('Find the conflicting file in your History sidebar.');
+        window.open(`${window.location.origin}${window.location.pathname}?h=${existingFile.id}`, '_blank');
     };
 }
 

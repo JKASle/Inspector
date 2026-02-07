@@ -1,5 +1,5 @@
 import { initPreferences, prefs, setTheme } from './settings.js';
-import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory, updateFileNameInDB, findFileByName } from './db.js';
+import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory, updateFileNameInDB, findFileByName, getFileById } from './db.js';
 import { fetchDriveFile, parseDriveLink, cancelFetch, fetchProxyBlob } from './drive.js';
 import { parseConversation, generateMetadataHTML, getCleanJSON, extractMedia } from './parser.js';
 import * as UI from './ui.js';
@@ -34,6 +34,26 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function handleInitialLoad() {
+    const urlParams = new URLSearchParams(window.location.search);
+    let fileId = urlParams.get('view') || urlParams.get('id') || urlParams.get('chat');
+    const historyId = urlParams.get('h') || urlParams.get('localId');
+
+    if (historyId) {
+        getFileById(parseInt(historyId), (record) => {
+            if (record) {
+                loadFileFromRecord(record);
+            } else {
+                showToast("File not found in history.");
+                handleInitialLoadWithoutHistory();
+            }
+        });
+        return;
+    }
+
+    handleInitialLoadWithoutHistory();
+}
+
+function handleInitialLoadWithoutHistory() {
     const urlParams = new URLSearchParams(window.location.search);
     let fileId = urlParams.get('view') || urlParams.get('id') || urlParams.get('chat');
 
@@ -285,8 +305,13 @@ async function handleScrape() {
 
         let name = '';
         const h1 = doc.querySelector('.toolbar-container h1');
+        const itempropName = doc.querySelector('[itemprop="name"]');
+
         if (h1) {
             name = h1.textContent.trim();
+        } else if (itempropName) {
+            name = itempropName.getAttribute('content') || itempropName.textContent;
+            name = name.replace(' - Google Drive', '').trim();
         } else {
             const ogTitle = doc.querySelector('meta[property="og:title"]');
             if (ogTitle) {
