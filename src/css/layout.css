@@ -553,16 +553,21 @@ button.search-toggle.active {
 }
 
 .filename-input {
-    background: var(--bg-app);
-    border: 1px solid var(--accent-primary);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
     color: var(--text-main);
     padding: 2px 8px;
     border-radius: var(--radius-sm);
     font-size: 14px;
     font-weight: 500;
     width: 100%;
-    outline: none;
+    outline: none !important;
     font-family: inherit;
+    transition: all 0.2s ease;
+}
+
+.filename-input:focus {
+    border-color: var(--accent-primary);
 }
 
 #scrape-name-btn {

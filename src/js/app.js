@@ -333,8 +333,8 @@ function setupEventListeners() {
         const tempMedia = extractMedia({ chunkedPrompt: { chunks: chunks } });
         if(tempMedia.length > 0) {
             handleBulkDownload(tempMedia, (pct) => {
-               if(pct === 0) UI.showToast("Zipping media...");
-               if(pct === 100) UI.showToast("Download started");
+               if(pct === 0) showToast("Zipping media...");
+               if(pct === 100) showToast("Download started");
             });
         }
     });
@@ -563,13 +563,13 @@ function performRename(newName) {
         loadHistory();
         UI.updateFilename(newName, state.currentFileId);
         document.title = `${newName} | Inspector`;
-        UI.showToast("Renamed successfully");
+        showToast("Renamed successfully");
     });
 }
 
 async function handleScrapeName() {
     if (!state.currentFileId) return;
-    UI.showToast("Attempting to get name...");
+    showToast("Attempting to get name...");
 
     const originalUrl = `https://aistudio.google.com/prompts/${state.currentFileId}`;
     const proxyUrl = `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(originalUrl)}`;
@@ -583,22 +583,22 @@ async function handleScrapeName() {
         if (h1 && h1.textContent) {
             const name = h1.textContent.trim();
             if (name) {
-                const input = document.getElementById('file-name-input');
-                const display = document.getElementById('file-name-display');
+                const input = document.getElementById('filename-input');
+                const display = document.getElementById('filename-display');
                 display.style.display = 'none';
                 input.style.display = 'block';
                 input.value = name;
                 input.focus();
                 input.select();
-                UI.showToast("Name found! Press Enter to confirm.");
+                showToast("Name found! Press Enter to confirm.");
             } else {
-                UI.showToast("Could not find a name on the page.");
+                showToast("Could not find a name on the page.");
             }
         } else {
-            UI.showToast("Could not find a name on the page.");
+            showToast("Could not find a name on the page.");
         }
     } catch (e) {
         console.error("Scraping failed", e);
-        UI.showToast("Failed to scrape name. Private file?");
+        showToast("Failed to scrape name. Private file?");
     }
 }
