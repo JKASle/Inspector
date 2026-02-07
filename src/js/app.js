@@ -1,5 +1,5 @@
 import { initPreferences, prefs, setTheme } from './settings.js';
-import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory } from './db.js';
+import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory, updateFileNameInDB, findFileByName } from './db.js';
 import { fetchDriveFile, parseDriveLink, cancelFetch, fetchProxyBlob } from './drive.js';
 import { parseConversation, generateMetadataHTML, getCleanJSON, extractMedia } from './parser.js';
 import * as UI from './ui.js';
@@ -11,6 +11,7 @@ const state = {
     currentPrompts: [],
     currentFileName: "Untitled",
     currentFileId: null,
+    currentFileRecordId: null,
     rawContent: null,
     isScrollMode: false,
     focusIndex: 0,
@@ -29,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     setupThemeLogic();
     UI.setNavigationContext(state, renderChat);
+    UI.setupRenamingUI(handleRename, handleScrape);
 });
 
 function handleInitialLoad() {
@@ -95,8 +97,9 @@ function handleText(text, name, driveId = null) {
             data: result.data,
             raw: text,
             driveId: driveId
-        }, (recordId) => {
-            state.currentFileRecordId = recordId;
+        }, (id) => {
+            state.currentFileRecordId = id;
+            UI.setCurrentFileRecordId(id);
             loadHistory();
         });
         
@@ -113,6 +116,8 @@ function loadFileFromRecord(record) {
     UI.showLoading();
     state.currentFileName = record.name;
     state.currentFileId = record.driveId || null;
+    state.currentFileRecordId = record.id;
+    UI.setCurrentFileRecordId(record.id);
     state.parsedData = record.data;
     state.rawContent = record.raw || JSON.stringify(record.data, null, 2);
     
@@ -121,8 +126,8 @@ function loadFileFromRecord(record) {
     state.currentPrompts = result.prompts;
     
     processAndRender();
-    loadHistory(); // Refresh history list to show active highlight
     UI.hideLoading();
+    loadHistory();
 }
 
 function loadFromDrive(id) {
@@ -143,7 +148,7 @@ function loadFromDrive(id) {
 }
 
 function processAndRender() {
-    UI.updateFilename(state.currentFileName, state.currentFileId);
+    UI.updateRenamingUI(state.currentFileName, !!state.currentFileId);
     document.title = `${state.currentFileName} | Inspector`;
     
     // Metadata
@@ -211,6 +216,80 @@ function loadHistory() {
             }
         });
     });
+}
+
+async function handleRename(newName) {
+    if (!state.currentFileRecordId) return;
+
+    findFileByName(newName, (existingFile) => {
+        if (existingFile && existingFile.id !== state.currentFileRecordId) {
+            UI.showConflictResolver(newName, existingFile,
+                () => finalizeRename(state.currentFileRecordId, newName + ' (2)'),
+                (otherNewName, currentNewName) => {
+                    updateFileNameInDB(existingFile.id, otherNewName, () => {
+                        finalizeRename(state.currentFileRecordId, currentNewName);
+                    });
+                }
+            );
+        } else {
+            finalizeRename(state.currentFileRecordId, newName);
+        }
+    });
+}
+
+function finalizeRename(id, name) {
+    updateFileNameInDB(id, name, () => {
+        state.currentFileName = name;
+        UI.updateRenamingUI(name, !!state.currentFileId);
+        document.title = `${name} | Inspector`;
+        loadHistory();
+        showToast('Renamed successfully');
+    });
+}
+
+async function handleScrape() {
+    if (!state.currentFileId) return;
+
+    showToast('Attempting to get name...', 'ph ph-cloud-arrow-down');
+
+    try {
+        const proxyUrl = 'https://api.codetabs.com/v1/proxy/?quest=';
+        const driveUrl = `https://drive.google.com/file/d/${state.currentFileId}/view`;
+        const response = await fetch(proxyUrl + encodeURIComponent(driveUrl));
+        const html = await response.text();
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        let name = '';
+        const h1 = doc.querySelector('.toolbar-container h1');
+        if (h1) {
+            name = h1.textContent.trim();
+        } else {
+            const ogTitle = doc.querySelector('meta[property="og:title"]');
+            if (ogTitle) {
+                name = ogTitle.getAttribute('content').replace(' - Google Drive', '').trim();
+            } else {
+                name = doc.title.replace(' - Google Drive', '').trim();
+            }
+        }
+
+        if (name && name !== 'Google Drive: Term of Service Verification') {
+            const filenameInput = document.getElementById('filename-input');
+            const filenameDisplay = document.getElementById('filename-display');
+
+            filenameDisplay.classList.add('hidden');
+            filenameInput.classList.remove('hidden');
+            filenameInput.value = name;
+            filenameInput.focus();
+            showToast('Name found! Press Enter to confirm.');
+        } else {
+            showToast('Could not find name automatically.', 'ph ph-warning-circle');
+        }
+    } catch (e) {
+        console.error(e);
+        showToast('Error scraping name.', 'ph ph-warning-circle');
+    }
 }
 
 function performSearch(term) {

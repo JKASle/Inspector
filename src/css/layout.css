@@ -557,6 +557,7 @@ button.search-toggle.active {
     opacity: 0;
     transition: opacity 0.2s ease;
     pointer-events: none;
+    margin-left: 4px;
 }
 
 .filename-wrapper:not(.is-empty):hover .edit-icon,
