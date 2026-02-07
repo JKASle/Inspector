@@ -673,6 +673,7 @@ export function updateFilename(name, driveId = null) {
 export function setupRenamingUI(onRename, onScrape) {
     console.log("Setting up renaming UI", els.filenameDisplay);
     els.filenameDisplay.addEventListener('click', () => {
+        if (els.filenameDisplay.textContent === 'No file loaded') return;
         console.log("Filename display clicked");
         els.filenameDisplay.classList.add('hidden');
         els.filenameInput.classList.remove('hidden');
@@ -755,7 +756,12 @@ export function showConflictModal(conflictInfo, handlers) {
 
         conflictSection.classList.add('hidden');
         els.errorModal.classList.add('hidden');
-        onChangeOtherName(conflictingFile, newOtherName, newCurrentName);
+
+        if (newOtherName === conflictingFile.name && newCurrentName === currentName) {
+            onRenameAnyways();
+        } else {
+            onChangeOtherName(conflictingFile, newOtherName, newCurrentName);
+        }
     };
 
     // Override the dismiss button to also hide conflict section
