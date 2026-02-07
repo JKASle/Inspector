@@ -865,7 +865,7 @@ export function renderHistoryLists(recentFiles, pinnedFiles, handlers) {
     const createItem = (file) => {
         const div = document.createElement('div');
         div.className = 'recent-file-item';
-        if(file.name === els.filenameDisplay.title) div.classList.add('active');
+        if (_appState && file.id === _appState.currentFileRecordId) div.classList.add('active');
         
         div.onclick = () => onLoad(file);
 
