@@ -35,7 +35,7 @@ export function saveFileToHistory(fileObj, callback) {
     store.put(record);
     transaction.oncomplete = () => {
         cleanupHistory();
-        if (callback) callback();
+        if (callback) callback(record.id);
     };
 }
 
@@ -71,6 +71,38 @@ export function togglePinInDB(file, callback) {
     file.pinned = !file.pinned;
     tx.objectStore(STORE_NAME).put(file);
     tx.oncomplete = callback;
+}
+
+export function updateFileNameInDB(id, newName, callback) {
+    if (!db) return;
+    const tx = db.transaction([STORE_NAME], 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const getReq = store.get(id);
+    getReq.onsuccess = () => {
+        const data = getReq.result;
+        if (data) {
+            data.name = newName;
+            store.put(data);
+        }
+    };
+    tx.oncomplete = callback;
+}
+
+export function getFileById(id, callback) {
+    if (!db) return;
+    const req = db.transaction([STORE_NAME], 'readonly').objectStore(STORE_NAME).get(id);
+    req.onsuccess = (e) => callback(e.target.result);
+}
+
+export function findFileByName(name, callback) {
+    if (!db) return;
+    const req = db.transaction([STORE_NAME], 'readonly').objectStore(STORE_NAME).getAll();
+    req.onsuccess = (e) => {
+        const files = e.target.result;
+        // Find most recent file with this name
+        const match = files.filter(f => f.name === name).sort((a, b) => b.timestamp - a.timestamp)[0];
+        callback(match);
+    };
 }
 
 export function clearRecentsInDB(callback) {

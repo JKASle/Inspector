@@ -533,6 +533,14 @@ button.search-toggle.active {
     flex-shrink: 1;
 }
 
+.filename-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+}
+
 .filename {
     font-weight: 500;
     font-size: 14px;
@@ -541,6 +549,55 @@ button.search-toggle.active {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 24ch;
+    cursor: pointer;
+}
+
+.filename-input {
+    background: var(--bg-app);
+    border: 1px solid var(--accent-primary);
+    color: var(--text-main);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    width: 100%;
+    outline: none;
+    font-family: inherit;
+}
+
+#scrape-name-btn {
+    font-size: 16px;
+    color: var(--text-muted);
+}
+
+#scrape-name-btn:hover {
+    color: var(--accent-primary);
+}
+
+/* Conflict UI */
+.conflict-actions {
+    margin-top: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.conflict-expandable {
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 10px;
+    margin-top: 5px;
+}
+
+.conflict-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.conflict-input-group label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
 }
 
 .toolbar-actions {

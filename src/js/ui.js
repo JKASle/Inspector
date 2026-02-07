@@ -81,6 +81,8 @@ const els = {
     sidebar: document.getElementById('sidebar'),
     sidebarOverlay: document.getElementById('sidebar-overlay'),
     filenameDisplay: document.getElementById('filename-display'),
+    filenameInput: document.getElementById('filename-input'),
+    scrapeNameBtn: document.getElementById('scrape-name-btn'),
     
     // History
     recentList: document.getElementById('recent-files-list'),
@@ -637,6 +639,7 @@ export function toggleSidebar() {
 export function updateFilename(name, driveId = null) {
     els.filenameDisplay.textContent = truncate(name, 64);
     els.filenameDisplay.title = name;
+    els.filenameInput.value = name;
 
     const container = document.getElementById('file-info-container');
     const popover = document.getElementById('file-info-popover');
@@ -646,8 +649,12 @@ export function updateFilename(name, driveId = null) {
     if (driveId) {
         container.classList.add('has-id');
         popover.classList.remove('hidden');
+        els.scrapeNameBtn.classList.remove('hidden');
         
-        openBtn.href = `https://aistudio.google.com/prompts/${driveId}`;
+        const fullLink = `https://aistudio.google.com/prompts/${driveId}`;
+        openBtn.href = fullLink;
+        openBtn.title = fullLink;
+        copyBtn.title = driveId;
         
         // Remove old listener to prevent duplicates
         const newCopyBtn = copyBtn.cloneNode(true);
@@ -659,7 +666,98 @@ export function updateFilename(name, driveId = null) {
     } else {
         container.classList.remove('has-id');
         popover.classList.add('hidden');
+        els.scrapeNameBtn.classList.add('hidden');
     }
+}
+
+export function setupRenamingUI(onRename, onScrape) {
+    console.log("Setting up renaming UI", els.filenameDisplay);
+    els.filenameDisplay.addEventListener('click', () => {
+        console.log("Filename display clicked");
+        els.filenameDisplay.classList.add('hidden');
+        els.filenameInput.classList.remove('hidden');
+        els.filenameInput.focus();
+        els.filenameInput.select();
+    });
+
+    els.filenameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            onRename(els.filenameInput.value);
+            exitRename();
+        } else if (e.key === 'Escape') {
+            exitRename();
+        }
+    });
+
+    els.filenameInput.addEventListener('blur', () => {
+        onRename(els.filenameInput.value);
+        exitRename();
+    });
+
+    function exitRename() {
+        els.filenameDisplay.classList.remove('hidden');
+        els.filenameInput.classList.add('hidden');
+        els.filenameInput.value = els.filenameDisplay.title;
+    }
+
+    els.scrapeNameBtn.addEventListener('click', onScrape);
+}
+
+export function showConflictModal(conflictInfo, handlers) {
+    const { currentName, conflictingFile, onRenameAnyways, onOpenConflicting, onChangeOtherName } = handlers;
+
+    showError("Name Conflict", `The name "${currentName}" is already taken.`, false);
+
+    const conflictSection = document.getElementById('conflict-resolution-section');
+    conflictSection.classList.remove('hidden');
+
+    const expandable = document.getElementById('other-name-expandable');
+    expandable.classList.add('hidden');
+
+    const anywaysBtn = document.getElementById('rename-anyways-btn');
+    const openBtn = document.getElementById('open-conflicting-btn');
+    const changeOtherBtn = document.getElementById('change-other-name-btn');
+    const confirmOtherBtn = document.getElementById('confirm-other-rename-btn');
+    const otherInput = document.getElementById('other-filename-input');
+
+    anywaysBtn.onclick = () => {
+        conflictSection.classList.add('hidden');
+        els.errorModal.classList.add('hidden');
+        onRenameAnyways();
+    };
+
+    openBtn.onclick = () => {
+        conflictSection.classList.add('hidden');
+        els.errorModal.classList.add('hidden');
+        onOpenConflicting(conflictingFile);
+    };
+
+    changeOtherBtn.onclick = () => {
+        expandable.classList.toggle('hidden');
+        if (!expandable.classList.contains('hidden')) {
+            otherInput.value = conflictingFile.name;
+            otherInput.focus();
+            otherInput.select();
+        }
+    };
+
+    confirmOtherBtn.onclick = () => {
+        const newOtherName = otherInput.value.trim();
+        if (newOtherName && newOtherName !== conflictingFile.name) {
+            conflictSection.classList.add('hidden');
+            els.errorModal.classList.add('hidden');
+            onChangeOtherName(conflictingFile, newOtherName);
+        }
+    };
+
+    // Override the dismiss button to also hide conflict section
+    const closeBtn = document.getElementById('close-error-btn');
+    const oldOnClick = closeBtn.onclick;
+    closeBtn.onclick = () => {
+        conflictSection.classList.add('hidden');
+        els.errorModal.classList.add('hidden');
+        if(oldOnClick) oldOnClick();
+    };
 }
 
 export function renderMetadata(metaHtml) {
