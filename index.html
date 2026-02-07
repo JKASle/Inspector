@@ -46,8 +46,7 @@
     <div id="loading-overlay" class="hidden">
         <div class="spinner"></div>
         <div class="loading-text">Processing...</div>
-        <button id="cancel-processing-btn" class="btn btn-secondary"
-            style="margin-top:20px; border-color:white; color:white; background:transparent;">Cancel / Stop</button>
+        <button id="cancel-processing-btn" class="btn btn-secondary">Cancel / Stop</button>
     </div>
 
     <!-- Image Modal -->
@@ -98,7 +97,7 @@
                     <p>Ensure sharing is set to "Anyone with the link".</p>
                 </div>
             </div>
-            <div id="conflict-resolution-section" class="hidden" style="padding: 0 20px 20px 20px;">
+            <div id="conflict-resolution-section" class="hidden conflict-section-padding">
                 <div id="conflict-initial-actions" class="conflict-actions">
                     <button id="rename-anyways-btn" class="btn btn-sm btn-secondary">Rename Anyways</button>
                     <button id="resolve-conflicts-btn" class="btn btn-sm btn-primary">Resolve Conflicts</button>
@@ -107,12 +106,12 @@
                 <div id="conflict-resolver-expandable" class="hidden conflict-expandable">
                     <div class="conflict-input-group">
                         <label for="other-filename-input">New name for the other file:</label>
-                        <input type="text" id="other-filename-input" class="filename-input" spellcheck="false" style="margin-bottom: 10px;">
+                        <input type="text" id="other-filename-input" class="filename-input mb-10" spellcheck="false">
 
                         <label for="current-filename-input">New name for this current file:</label>
-                        <input type="text" id="current-filename-input" class="filename-input" spellcheck="false" style="margin-bottom: 15px;">
+                        <input type="text" id="current-filename-input" class="filename-input mb-15" spellcheck="false">
 
-                        <div class="conflict-resolver-footer" style="display: flex; justify-content: space-between; gap: 10px;">
+                        <div class="conflict-resolver-footer flex-between-gap">
                             <button id="open-conflicting-btn" class="btn btn-sm btn-secondary">Open conflicting file (in new tab)</button>
                             <button id="rename-both-btn" class="btn btn-sm btn-primary">Rename Both</button>
                         </div>
@@ -121,7 +120,7 @@
             </div>
             <div class="error-footer">
                 <button id="close-error-btn" class="btn btn-sm btn-secondary">Dismiss</button>
-                <button id="retry-error-btn" class="btn btn-sm btn-primary" style="position: absolute; left: 50%; translate: -50%;">Retry</button>
+                <button id="retry-error-btn" class="btn btn-sm btn-primary">Retry</button>
                 <a id="open-drive-error-btn" href="#" target="_blank" class="btn btn-secondary btn-sm hidden">Open<i class="ph ph-arrow-square-out"></i></a>
             </div>
         </div>
@@ -137,7 +136,7 @@
             <div class="error-body">
                 <p id="confirm-message-text">Do you want to proceed?</p>
             </div>
-            <div class="error-footer" style="gap: 10px;">
+            <div class="error-footer gap-10">
                 <button id="confirm-cancel-btn" class="btn btn-secondary btn-sm">Cancel</button>
                 <button id="confirm-ok-btn" class="btn btn-primary btn-sm">Load File</button>
             </div>
@@ -163,7 +162,7 @@
             <div id="media-grid" class="media-grid">
                 <!-- Media items injected here -->
             </div>
-            <div id="zip-progress" class="hidden" style="padding: 10px; text-align: center; background: var(--bg-surface); border-top: 1px solid var(--border-subtle);">
+            <div id="zip-progress" class="hidden">
                 Preparing ZIP... <span id="zip-percent">0%</span>
             </div>
         </div>
@@ -264,7 +263,7 @@
                     <span class="toggle-label text-left">Timeline</span>
                 </div>
                 
-                <span class="setting-title" style="align-self:start; padding-top:6px;">Code Theme</span>
+                <span class="setting-title setting-title-aligned">Code Theme</span>
                 <div class="custom-select-wrapper" id="codeThemeWrapper">
                     <div class="custom-select-trigger" id="codeThemeTrigger">
                         <span id="currentThemeName">Android Studio</span>
@@ -276,7 +275,7 @@
                 </div>
                 
                 <span class="setting-title">Content Width</span>
-                <div class="slider-wrapper" style="width:100%">
+                <div class="slider-wrapper w-full">
                     <input type="range" id="widthSlider" min="600" max="1600" step="50" class="styled-range">
                 </div>
                 

@@ -727,6 +727,9 @@ export function showConflictResolver(currentName, existingFile, onRenameAnyways,
     const currentInput = document.getElementById('current-filename-input');
 
     errorText.textContent = `A file named "${currentName}" already exists in your history.`;
+    document.getElementById('retry-error-btn').classList.add('hidden');
+    document.getElementById('open-drive-error-btn').classList.add('hidden');
+    document.getElementById('error-gif-container').classList.add('hidden');
     els.errorModal.classList.remove('hidden');
     conflictSection.classList.remove('hidden');
     initialActions.classList.remove('hidden');
@@ -921,7 +924,7 @@ export function renderConversation(parsedData, promptIndex, promptsList) {
 }
 
 export function renderFullConversation(parsedData, promptsList) {
-    els.chatStream.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-faint); text-transform:uppercase; font-size:11px; font-weight:600; letter-spacing:0.05em;">Full Conversation History</div>';
+    els.chatStream.innerHTML = '<div class="full-history-header">Full Conversation History</div>';
     els.chatStream.setAttribute('data-view', 'full');
 
     let currentTurn = [];
@@ -994,8 +997,8 @@ function createMessageElement(chunks, role, id = null) {
     const isUser = role === 'user';
     const iconHtml = isUser ? 'You' : (isThought ? '<i class="ph-fill ph-brain"></i> Thinking' : '<i class="ph-fill ph-sparkle"></i> Gemini');
     const totalTokens = chunks.reduce((acc, c) => acc + (c.tokenCount || 0), 0);
-    const tokens = totalTokens > 0 ? `<span style="opacity:0.5; font-weight:400; margin-left:8px;">${totalTokens} tokens</span>` : '';
-    const expandIcon = isThought ? `<span class="thought-icon-rotate" style="margin-left:auto;"><i class="ph ph-caret-${prefs.collapseThoughts ? 'down' : 'up'}"></i></span>` : '';
+    const tokens = totalTokens > 0 ? `<span class="token-count">${totalTokens} tokens</span>` : '';
+    const expandIcon = isThought ? `<span class="thought-icon-rotate thought-expand-icon"><i class="ph ph-caret-${prefs.collapseThoughts ? 'down' : 'up'}"></i></span>` : '';
 
     const header = document.createElement('div');
     header.className = 'message-header';
@@ -1031,8 +1034,8 @@ function createMessageElement(chunks, role, id = null) {
             };
         } else {
             // Hide text buttons if no text
-            copyMd.style.display = 'none';
-            copyText.style.display = 'none';
+            copyMd.classList.add('hidden');
+            copyText.classList.add('hidden');
         }
 
         if (hasMedia && dlMedia) {
@@ -1085,8 +1088,7 @@ function createMessageElement(chunks, role, id = null) {
         }
         else if (chunk.inlineFile) {
             contentContainer = document.createElement('div');
-            contentContainer.className = 'message-bubble inline-file-bubble';
-            contentContainer.style.alignSelf = 'flex-start';
+            contentContainer.className = 'message-bubble inline-file-bubble align-start';
 
             const mimeType = chunk.inlineFile.mimeType || '';
             const dataUrl = `data:${mimeType};base64,${chunk.inlineFile.data}`;
@@ -1094,21 +1096,19 @@ function createMessageElement(chunks, role, id = null) {
             if (mimeType.startsWith('image/')) {
                 const img = document.createElement('img');
                 img.src = dataUrl;
-                img.style.maxWidth = '100%';
-                img.style.borderRadius = 'var(--radius-sm)';
+                img.className = 'media-fluid';
                 contentContainer.appendChild(img);
             } else if (mimeType.startsWith('video/')) {
                 const video = document.createElement('video');
                 video.src = dataUrl;
                 video.controls = true;
-                video.style.maxWidth = '100%';
-                video.style.borderRadius = 'var(--radius-sm)';
+                video.className = 'media-fluid';
                 contentContainer.appendChild(video);
             } else if (mimeType.startsWith('audio/')) {
                 const audio = document.createElement('audio');
                 audio.src = dataUrl;
                 audio.controls = true;
-                audio.style.width = '100%';
+                audio.className = 'media-full-width';
                 contentContainer.appendChild(audio);
             } else {
                 // Text/Code handling
@@ -1135,7 +1135,7 @@ function createMessageElement(chunks, role, id = null) {
             }
 
             if (mimeType.startsWith('image/')) {
-                contentContainer.style.cursor = 'zoom-in';
+                contentContainer.classList.add('cursor-zoom');
                 contentContainer.onclick = () => viewInlineFile(chunk.inlineFile.data, mimeType);
             }
         }
@@ -1394,12 +1394,12 @@ function showMediaPlayer(url, contentType) {
     if (contentType.startsWith('audio/')) {
         const audioContainer = document.createElement('div');
         audioContainer.className = 'audio-player-container';
-        audioContainer.innerHTML = `<i class="ph-fill ph-speaker-high" style="font-size: 64px; color: var(--text-muted); margin-bottom: 20px;"></i>`;
+        audioContainer.innerHTML = `<i class="ph-fill ph-speaker-high audio-placeholder-icon"></i>`;
         
         mediaElement = document.createElement('audio');
         mediaElement.controls = true;
         mediaElement.autoplay = true;
-        mediaElement.style.width = '100%';
+        mediaElement.className = 'media-full-width';
         
         audioContainer.appendChild(mediaElement);
         container.appendChild(audioContainer);
@@ -1408,8 +1408,7 @@ function showMediaPlayer(url, contentType) {
         mediaElement = document.createElement('video');
         mediaElement.controls = true;
         mediaElement.autoplay = true;
-        mediaElement.style.maxWidth = '100%';
-        mediaElement.style.maxHeight = '100%';
+        mediaElement.className = 'media-fluid';
         container.appendChild(mediaElement);
         document.getElementById('media-player-filename').textContent = "Video Player";
     }
@@ -1631,7 +1630,7 @@ function postProcessCodeBlocks() {
                 </button>
                 <span class="lang-tag">${lang}</span>
             </div>
-            <div style="display:flex; align-items:center;">
+            <div class="code-header-actions">
                 ${expandBtnHtml}
                 <button class="copy-btn"><i class="ph ph-copy"></i> Copy</button>
             </div>
