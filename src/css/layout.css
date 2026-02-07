@@ -429,7 +429,6 @@ button.search-toggle.active {
     background: var(--bg-app);
     position: relative;
     transition: background-color 0.3s ease;
-    overflow: hidden;
 }
 
 .toolbar {
@@ -533,6 +532,14 @@ button.search-toggle.active {
     flex-shrink: 1;
 }
 
+.filename-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+}
+
 .filename {
     font-weight: 500;
     font-size: 14px;
@@ -541,6 +548,73 @@ button.search-toggle.active {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 24ch;
+    cursor: pointer;
+}
+
+.edit-icon {
+    font-size: 14px;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+}
+
+.filename-wrapper:not(.is-empty):hover .edit-icon,
+.filename-input:not(.hidden) ~ .edit-icon {
+    opacity: 1;
+}
+
+.filename-input {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-main);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    width: 100%;
+    outline: none !important;
+    font-family: inherit;
+    transition: all 0.2s ease;
+}
+
+.filename-input:focus {
+    border-color: var(--accent-primary);
+}
+
+#scrape-name-btn {
+    font-size: 16px;
+    color: var(--text-muted);
+}
+
+#scrape-name-btn:hover {
+    color: var(--accent-primary);
+}
+
+/* Conflict UI */
+.conflict-actions {
+    margin-top: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.conflict-expandable {
+    border-top: 1px solid var(--border-subtle);
+    padding-top: 10px;
+    margin-top: 5px;
+}
+
+.conflict-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.conflict-input-group label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
 }
 
 .toolbar-actions {

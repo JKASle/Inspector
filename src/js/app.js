@@ -1,5 +1,5 @@
 import { initPreferences, prefs, setTheme } from './settings.js';
-import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory } from './db.js';
+import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory, updateFileNameInDB, findFileByName, getFileById } from './db.js';
 import { fetchDriveFile, parseDriveLink, cancelFetch, fetchProxyBlob } from './drive.js';
 import { parseConversation, generateMetadataHTML, getCleanJSON, extractMedia } from './parser.js';
 import * as UI from './ui.js';
@@ -11,6 +11,7 @@ const state = {
     currentPrompts: [],
     currentFileName: "Untitled",
     currentFileId: null,
+    currentFileRecordId: null,
     rawContent: null,
     isScrollMode: false,
     focusIndex: 0,
@@ -29,11 +30,21 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     setupThemeLogic();
     UI.setNavigationContext(state, renderChat);
+    UI.setupRenamingUI(renameCurrentFile, handleScrapeName);
 });
 
 function handleInitialLoad() {
     const urlParams = new URLSearchParams(window.location.search);
     let fileId = urlParams.get('view') || urlParams.get('id') || urlParams.get('chat');
+    let localId = urlParams.get('localId');
+
+    if (localId) {
+        getFileById(parseInt(localId), (record) => {
+            if (record) loadFileFromRecord(record);
+            else UI.showError("Not Found", "Local file not found.");
+        });
+        return;
+    }
 
     // Hash routing check
     if (!fileId && window.location.hash) {
@@ -95,7 +106,10 @@ function handleText(text, name, driveId = null) {
             data: result.data,
             raw: text,
             driveId: driveId
-        }, () => loadHistory());
+        }, (recordId) => {
+            state.currentFileRecordId = recordId;
+            loadHistory();
+        });
         
         processAndRender();
         UI.hideLoading();
@@ -108,6 +122,7 @@ function handleText(text, name, driveId = null) {
 
 function loadFileFromRecord(record) {
     UI.showLoading();
+    state.currentFileRecordId = record.id;
     state.currentFileName = record.name;
     state.currentFileId = record.driveId || null;
     state.parsedData = record.data;
@@ -318,8 +333,8 @@ function setupEventListeners() {
         const tempMedia = extractMedia({ chunkedPrompt: { chunks: chunks } });
         if(tempMedia.length > 0) {
             handleBulkDownload(tempMedia, (pct) => {
-               if(pct === 0) UI.showToast("Zipping media...");
-               if(pct === 100) UI.showToast("Download started");
+               if(pct === 0) showToast("Zipping media...");
+               if(pct === 100) showToast("Download started");
             });
         }
     });
@@ -498,4 +513,108 @@ function downloadString(content, filename, contentType) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+}
+
+function renameCurrentFile(newName) {
+    newName = newName.trim();
+    if (!newName || newName === state.currentFileName) return;
+
+    findFileByName(newName, (conflictingFile) => {
+        if (conflictingFile && conflictingFile.id !== state.currentFileRecordId) {
+            UI.showConflictModal({ currentName: newName, conflictingFile }, {
+                onRenameAnyways: () => {
+                    // Check if the original name is now available (resolved in another tab)
+                    findFileByName(newName, (conflict) => {
+                        if (!conflict || conflict.id === state.currentFileRecordId) {
+                            performRename(newName);
+                            return;
+                        }
+
+                        let increment = 2;
+                        const findNext = (base) => {
+                            const candidate = `${base} (${increment})`;
+                            findFileByName(candidate, (innerConflict) => {
+                                if (innerConflict) {
+                                    increment++;
+                                    findNext(base);
+                                } else {
+                                    performRename(candidate);
+                                }
+                            });
+                        };
+                        findNext(newName);
+                    });
+                },
+                onOpenConflicting: (file) => {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('view');
+                    url.searchParams.delete('id');
+                    url.searchParams.delete('chat');
+                    url.searchParams.set('localId', file.id);
+                    window.open(url.toString(), '_blank');
+                },
+                onChangeOtherName: (file, newOtherName, newCurrentName) => {
+                    updateFileNameInDB(file.id, newOtherName, () => {
+                        if (newCurrentName) {
+                            performRename(newCurrentName);
+                        } else {
+                            loadHistory();
+                        }
+                    });
+                }
+            });
+        } else {
+            performRename(newName);
+        }
+    });
+}
+
+function performRename(newName) {
+    state.currentFileName = newName;
+    updateFileNameInDB(state.currentFileRecordId, newName, () => {
+        loadHistory();
+        UI.updateFilename(newName, state.currentFileId);
+        document.title = `${newName} | Inspector`;
+        showToast("Renamed successfully");
+    });
+}
+
+async function handleScrapeName() {
+    if (!state.currentFileId) return;
+    showToast("Attempting to fetch name...");
+
+    const originalUrl = `https://drive.google.com/file/d/${state.currentFileId}/edit`;
+    const proxyUrl = `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(originalUrl)}`;
+
+    try {
+        const response = await fetch(proxyUrl);
+        const html = await response.text();
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+
+        let name = (doc.querySelector('head > meta[property="og:title"]')?.getAttribute('content')) ||
+                   (doc.querySelector('body > meta[itemprop="name"]')?.getAttribute('content')) ||
+                   doc.title;
+
+        if (name && name.endsWith(" - Google Drive")) {
+            name = name.slice(0, -" - Google Drive".length);
+        }
+
+        if (name && name !== "Google Drive: Term of Service Verification") {
+            const input = document.getElementById('filename-input');
+            const display = document.getElementById('filename-display');
+
+            display.classList.add('hidden');
+            input.classList.remove('hidden');
+            input.value = name;
+            input.focus();
+            input.select();
+
+            showToast("Name found! Press Enter to confirm.");
+        } else {
+            showToast("Could not find a name on the page. Private file?");
+        }
+    } catch (e) {
+        console.error("Scraping failed", e);
+        showToast("Failed to scrape name. Network error?");
+    }
 }
