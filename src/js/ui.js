@@ -838,7 +838,9 @@ export function showConflictResolver(targetName, existingFile, currentFileName, 
             </div>
             <div class="conflict-resolution-actions flex-column gap-10">
                 <button id="rename-both-btn" class="btn btn-primary w-full">Rename Both</button>
-                <button id="open-conflicting-btn" class="btn btn-secondary w-full">Open conflicting file</button>
+                <button id="open-conflicting-btn" class="btn btn-secondary w-full">
+                    <i class="ph ph-arrow-square-out"></i> Open conflicting file
+                </button>
             </div>
         </div>
     `;
@@ -874,10 +876,6 @@ export function showConflictResolver(targetName, existingFile, currentFileName, 
         const otherNewName = otherInput.value.trim() || existingFile.name;
         const currentNewName = currentInput.value.trim() || currentFileName;
         if (otherNewName && currentNewName) {
-            if (otherNewName === currentNewName) {
-                showToast('Names must be different', 'error');
-                return;
-            }
             onRenameBoth(otherNewName, currentNewName);
             document.getElementById('generic-modal').classList.add('hidden');
         }

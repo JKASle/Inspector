@@ -1,5 +1,5 @@
 import { initPreferences, prefs, setTheme } from './settings.js';
-import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory, updateFileNameInDB, findFileByName } from './db.js';
+import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory, updateFileNameInDB, findFileByName, getFileById } from './db.js';
 import { fetchDriveFile, parseDriveLink, cancelFetch, fetchProxyBlob } from './drive.js';
 import { parseConversation, generateMetadataHTML, getCleanJSON, extractMedia } from './parser.js';
 import * as UI from './ui.js';
@@ -41,6 +41,16 @@ document.addEventListener('DOMContentLoaded', () => {
 function handleInitialLoad() {
     const urlParams = new URLSearchParams(window.location.search);
     let fileId = urlParams.get('view') || urlParams.get('id') || urlParams.get('chat');
+    const historyId = urlParams.get('h') || urlParams.get('localId');
+
+    if (historyId) {
+        getFileById(Number(historyId), (record) => {
+            if (record) {
+                loadFileFromRecord(record);
+            }
+        });
+        return;
+    }
 
     // Hash routing check
     if (!fileId && window.location.hash) {
@@ -230,9 +240,19 @@ async function attemptScrapeName() {
         const html = await response.text();
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, 'text/html');
-        const h1 = doc.querySelector('.toolbar-container h1');
-        if (h1 && h1.textContent.trim()) {
-            const scrapedName = h1.textContent.trim();
+        const h1 = doc.querySelector('.toolbar-container h1') || doc.querySelector('h1');
+        let scrapedName = h1 ? h1.textContent.trim() : null;
+
+        if (!scrapedName) {
+            const metaTitle = doc.querySelector('meta[property="og:title"]') || doc.querySelector('meta[name="twitter:title"]');
+            if (metaTitle) scrapedName = metaTitle.getAttribute('content');
+        }
+
+        if (!scrapedName && doc.title) {
+            scrapedName = doc.title.replace(' - Google Drive', '').replace(' - Google AI Studio', '').trim();
+        }
+
+        if (scrapedName) {
             if (scrapedName !== state.currentFileName) {
                 // Populate the input for user review instead of direct save
                 UI.updateRenamingUI(scrapedName, state.currentFileId);
@@ -254,7 +274,7 @@ async function attemptScrapeName() {
         }
     } catch (e) {
         console.error("Scrape failed", e);
-        UI.showToast("Failed to scrape name");
+        showToast("Failed to scrape name", "error");
     } finally {
         UI.hideLoading();
     }
@@ -282,11 +302,7 @@ async function handleRename(newName) {
                 (otherNewName, currentNewName) => {
                     // Resolve both
                     renameFileInDB(existingFile.id, otherNewName, () => {
-                        renameFileInDB(state.currentFileRecordId, currentNewName, () => {
-                            state.currentFileName = currentNewName;
-                            processAndRender();
-                            loadHistory();
-                        });
+                        finalizeRenameWithConflictCheck(state.currentFileRecordId, currentNewName);
                     });
                 }
             );
@@ -420,8 +436,8 @@ function setupEventListeners() {
         const tempMedia = extractMedia({ chunkedPrompt: { chunks: chunks } });
         if(tempMedia.length > 0) {
             handleBulkDownload(tempMedia, (pct) => {
-               if(pct === 0) UI.showToast("Zipping media...");
-               if(pct === 100) UI.showToast("Download started");
+               if(pct === 0) showToast("Zipping media...");
+               if(pct === 100) showToast("Download started");
             });
         }
     });

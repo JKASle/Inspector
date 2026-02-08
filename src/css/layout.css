@@ -548,6 +548,10 @@ button.search-toggle.active {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 24ch;
+    cursor: default;
+}
+
+.filename-wrapper:not(.is-empty) .filename {
     cursor: pointer;
 }
 
