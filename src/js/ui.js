@@ -646,6 +646,11 @@ export function showModal(config) {
     }
 
     // Footer Buttons Logic
+    // Rule:
+    // 1 Button: Secondary Left (Dismiss)
+    // 2 Buttons: Secondary Left (Dismiss), Primary Right
+    // 3 Buttons: Secondary Left (Dismiss), Primary Centre, Secondary Right
+
     // Left: Dismiss (Always there)
     const dismissBtn = document.createElement('button');
     dismissBtn.className = 'btn btn-sm btn-secondary';
@@ -699,9 +704,10 @@ export function showModal(config) {
     } else if (primary || secondary) {
         // 2 Buttons: [Dismiss Left] [Primary or Secondary Right]
         const btnConfig = primary || secondary;
-        const isPrimary = !!primary;
+        // User says 2 buttons: Secondary Left, Primary Right.
+        // So if we only have one action button, it should be Primary.
         const btn = (btnConfig.href) ? document.createElement('a') : document.createElement('button');
-        btn.className = btnConfig.className || (isPrimary ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-secondary');
+        btn.className = btnConfig.className || 'btn btn-sm btn-primary';
         btn.innerHTML = btnConfig.text;
         if (btnConfig.href) {
             btn.href = btnConfig.href;
@@ -813,7 +819,7 @@ export function setupRenamingUI(onRename, onScrape) {
     });
 }
 
-export function showConflictResolver(currentName, existingFile, onRenameAnyways, onRenameBoth) {
+export function showConflictResolver(targetName, existingFile, currentFileName, onRenameAnyways, onRenameBoth) {
     const extra = document.createElement('div');
     extra.className = 'conflict-section-padding';
     extra.innerHTML = `
@@ -831,7 +837,7 @@ export function showConflictResolver(currentName, existingFile, onRenameAnyways,
     function setupInitialState() {
         showModal({
             title: 'File Name Conflict',
-            message: `A file named "${currentName}" already exists in your history.`,
+            message: `The name is already taken.`,
             headerColor: '#ef4444',
             iconClass: 'ph-fill ph-warning-circle',
             extraContent: extra,
@@ -841,21 +847,28 @@ export function showConflictResolver(currentName, existingFile, onRenameAnyways,
                     extra.querySelector('#conflict-resolver-expandable').classList.remove('hidden');
                     const otherInput = extra.querySelector('#other-filename-input');
                     const currentInput = extra.querySelector('#current-filename-input');
-                    otherInput.value = existingFile.name;
-                    currentInput.value = currentName;
+
+                    // Logic:
+                    // Other file: placeholder only
+                    otherInput.placeholder = existingFile.name;
+                    otherInput.value = '';
+
+                    // Current file: value = targetName, placeholder = currentFileName
+                    currentInput.placeholder = currentFileName;
+                    currentInput.value = targetName;
 
                     // Re-show modal with new buttons
                     showModal({
                         title: 'Resolve Conflicts',
-                        message: `Rename both files to resolve the conflict.`,
+                        message: `Rename files to resolve the conflict.`,
                         headerColor: '#ef4444',
                         iconClass: 'ph-fill ph-warning-circle',
                         extraContent: extra,
                         primaryBtn: {
                             text: 'Rename Both',
                             onClick: () => {
-                                const otherNewName = otherInput.value.trim();
-                                const currentNewName = currentInput.value.trim();
+                                const otherNewName = otherInput.value.trim() || existingFile.name;
+                                const currentNewName = currentInput.value.trim() || currentFileName;
                                 if (otherNewName && currentNewName) {
                                     onRenameBoth(otherNewName, currentNewName);
                                     return true; // Close modal
@@ -872,7 +885,7 @@ export function showConflictResolver(currentName, existingFile, onRenameAnyways,
                         }
                     });
 
-                    setTimeout(() => otherInput.focus(), 50);
+                    setTimeout(() => currentInput.focus(), 50);
                     return false; // Keep open for now (we called showModal again)
                 }
             },
@@ -1829,8 +1842,7 @@ export function showError(title, message, showGif, retryCallback, fileId) {
     } else if (fileId) {
         config.primaryBtn = {
             text: 'Open <i class="ph ph-arrow-square-out"></i>',
-            href: `https://drive.google.com/file/d/${fileId}/view?usp=sharing`,
-            className: 'btn btn-secondary btn-sm'
+            href: `https://drive.google.com/file/d/${fileId}/view?usp=sharing`
         };
     }
 

@@ -1,5 +1,5 @@
 import { initPreferences, prefs, setTheme } from './settings.js';
-import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory, updateFileNameInDB, findFileByName, getFileById } from './db.js';
+import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory, updateFileNameInDB, findFileByName } from './db.js';
 import { fetchDriveFile, parseDriveLink, cancelFetch, fetchProxyBlob } from './drive.js';
 import { parseConversation, generateMetadataHTML, getCleanJSON, extractMedia } from './parser.js';
 import * as UI from './ui.js';
@@ -23,38 +23,21 @@ const state = {
 // --- Initialization ---
 document.addEventListener('DOMContentLoaded', () => {
     initPreferences();
-    UI.initAllUI();
     initDB(() => {
         loadHistory();
         handleInitialLoad();
     });
     setupEventListeners();
     setupThemeLogic();
-    UI.setNavigationContext(state, renderChat);
-    UI.setupRenamingUI(handleRename, handleScrape);
+    UI.setupRenamingUI(handleRename, attemptScrapeName);
+    UI.setNavigationContext(state, {
+        onPromptClick: renderChat,
+        onRename: handleRename,
+        onScrapeName: attemptScrapeName
+    });
 });
 
 function handleInitialLoad() {
-    const urlParams = new URLSearchParams(window.location.search);
-    let fileId = urlParams.get('view') || urlParams.get('id') || urlParams.get('chat');
-    const historyId = urlParams.get('h') || urlParams.get('localId');
-
-    if (historyId) {
-        getFileById(parseInt(historyId), (record) => {
-            if (record) {
-                loadFileFromRecord(record);
-            } else {
-                showToast("File not found in history.");
-                handleInitialLoadWithoutHistory();
-            }
-        });
-        return;
-    }
-
-    handleInitialLoadWithoutHistory();
-}
-
-function handleInitialLoadWithoutHistory() {
     const urlParams = new URLSearchParams(window.location.search);
     let fileId = urlParams.get('view') || urlParams.get('id') || urlParams.get('chat');
 
@@ -120,8 +103,6 @@ function handleText(text, name, driveId = null) {
             driveId: driveId
         }, (id) => {
             state.currentFileRecordId = id;
-            UI.setCurrentFileRecordId(id);
-            updateUrl(driveId, id);
             loadHistory();
         });
         
@@ -139,7 +120,6 @@ function loadFileFromRecord(record) {
     state.currentFileName = record.name;
     state.currentFileId = record.driveId || null;
     state.currentFileRecordId = record.id;
-    UI.setCurrentFileRecordId(record.id);
     state.parsedData = record.data;
     state.rawContent = record.raw || JSON.stringify(record.data, null, 2);
     
@@ -147,10 +127,8 @@ function loadFileFromRecord(record) {
     const result = parseConversation(state.rawContent);
     state.currentPrompts = result.prompts;
     
-    updateUrl(record.driveId, record.id);
     processAndRender();
     UI.hideLoading();
-    loadHistory();
 }
 
 function loadFromDrive(id) {
@@ -237,8 +215,32 @@ function loadHistory() {
             onTogglePin: (file) => {
                 togglePinInDB(file, () => loadHistory());
             }
-        });
+        }, state.currentFileRecordId);
     });
+}
+
+async function attemptScrapeName() {
+    if (!state.currentFileId) return;
+    UI.showLoading();
+    const url = `https://aistudio.google.com/app/prompts/${state.currentFileId}`;
+    try {
+        const proxyUrl = `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl);
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const h1 = doc.querySelector('.toolbar-container h1');
+        if (h1 && h1.textContent.trim()) {
+            handleRename(h1.textContent.trim());
+        } else {
+            UI.showToast("Could not find name in page");
+        }
+    } catch (e) {
+        console.error("Scrape failed", e);
+        UI.showToast("Failed to scrape name");
+    } finally {
+        UI.hideLoading();
+    }
 }
 
 async function handleRename(newName) {
@@ -246,100 +248,37 @@ async function handleRename(newName) {
 
     findFileByName(newName, (existingFile) => {
         if (existingFile && existingFile.id !== state.currentFileRecordId) {
-            UI.showConflictResolver(newName, existingFile,
+            UI.showConflictResolver(newName, existingFile, state.currentFileName,
                 () => finalizeRenameWithConflictCheck(state.currentFileRecordId, newName),
                 (otherNewName, currentNewName) => {
-                    if (otherNewName === currentNewName) {
-                        finalizeRenameWithConflictCheck(state.currentFileRecordId, currentNewName);
-                    } else {
-                        if (otherNewName !== existingFile.name) {
-                            updateFileNameInDB(existingFile.id, otherNewName, () => {
-                                finalizeRenameWithConflictCheck(state.currentFileRecordId, currentNewName);
-                            });
-                        } else {
-                            finalizeRenameWithConflictCheck(state.currentFileRecordId, currentNewName);
-                        }
-                    }
+                    // Resolve both
+                    renameFileInDB(existingFile.id, otherNewName, () => {
+                        renameFileInDB(state.currentFileRecordId, currentNewName, () => {
+                            state.currentFileName = currentNewName;
+                            processAndRender();
+                            loadHistory();
+                        });
+                    });
                 }
             );
         } else {
-            finalizeRename(state.currentFileRecordId, newName);
+            finalizeRenameWithConflictCheck(state.currentFileRecordId, newName);
         }
     });
 }
 
-function finalizeRename(id, name) {
-    updateFileNameInDB(id, name, () => {
-        state.currentFileName = name;
-        UI.updateRenamingUI(name, state.currentFileId);
-        document.title = `${name} | Inspector`;
+function finalizeRenameWithConflictCheck(id, newName) {
+    renameFileInDB(id, newName, () => {
+        state.currentFileName = newName;
+        processAndRender();
         loadHistory();
-        showToast('Renamed successfully');
     });
 }
 
-function finalizeRenameWithConflictCheck(id, targetName) {
-    const tryRename = (name, num) => {
-        const candidate = num === 1 ? name : `${name} (${num})`;
-        findFileByName(candidate, (exists) => {
-            if (!exists || exists.id === id) {
-                finalizeRename(id, candidate);
-            } else {
-                tryRename(name, num + 1);
-            }
-        });
-    };
-    tryRename(targetName, 1);
-}
-
-async function handleScrape() {
-    if (!state.currentFileId) return;
-
-    showToast('Attempting to get name...', 'ph ph-cloud-arrow-down');
-
-    try {
-        const proxyUrl = 'https://api.codetabs.com/v1/proxy/?quest=';
-        const driveUrl = `https://drive.google.com/file/d/${state.currentFileId}/view`;
-        const response = await fetch(proxyUrl + encodeURIComponent(driveUrl));
-        const html = await response.text();
-
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-
-        let name = '';
-        const h1 = doc.querySelector('.toolbar-container h1');
-        const itempropName = doc.querySelector('[itemprop="name"]');
-
-        if (h1) {
-            name = h1.textContent.trim();
-        } else if (itempropName) {
-            name = itempropName.getAttribute('content') || itempropName.textContent;
-            name = name.replace(' - Google Drive', '').trim();
-        } else {
-            const ogTitle = doc.querySelector('meta[property="og:title"]');
-            if (ogTitle) {
-                name = ogTitle.getAttribute('content').replace(' - Google Drive', '').trim();
-            } else {
-                name = doc.title.replace(' - Google Drive', '').trim();
-            }
-        }
-
-        if (name && name !== 'Google Drive: Term of Service Verification') {
-            const filenameInput = document.getElementById('filename-input');
-            const filenameDisplay = document.getElementById('filename-display');
-
-            filenameDisplay.classList.add('hidden');
-            filenameInput.classList.remove('hidden');
-            filenameInput.value = name;
-            filenameInput.focus();
-            showToast('Name found! Press Enter to confirm.');
-        } else {
-            showToast('Could not find name automatically.', 'ph ph-warning-circle');
-        }
-    } catch (e) {
-        console.error(e);
-        showToast('Error scraping name.', 'ph ph-warning-circle');
-    }
+function renameFileInDB(id, newName, callback) {
+    updateFileNameInDB(id, newName, () => {
+        if (callback) callback();
+    });
 }
 
 function performSearch(term) {
