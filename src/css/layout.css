@@ -505,9 +505,8 @@ button.search-toggle.active {
     pointer-events: none;
 }
 
-.prompt-item.is-edited i:first-child {
-    color: var(--accent-primary);
-    filter: saturate(0.5); /* Subtle change as requested */
+.prompt-item.is-edited > i:first-child {
+    color: #bab08a;
 }
 
 .prompt-item-actions {
@@ -516,8 +515,6 @@ button.search-toggle.active {
     gap: 4px;
     opacity: 0;
     transition: opacity 0.2s ease;
-    background: var(--hover-bg);
-    padding-left: 8px;
     position: absolute;
     right: 8px;
     top: 50%;
@@ -536,7 +533,7 @@ button.search-toggle.active {
     padding: 2px 4px;
     border-radius: 4px;
     font-size: 13px;
-    width: 100%;
+    width: calc(100% - 50px);
     outline: none;
     font-family: inherit;
 }

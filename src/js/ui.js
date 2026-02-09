@@ -972,7 +972,7 @@ export function populateSidebar(prompts, handlers, activeRecord = null) {
             // Just Icon
             iconHtml = `<i class="${baseIconClass}"></i>`;
         }
-        
+
         const contentSpan = document.createElement('span');
         contentSpan.className = 'prompt-item-content';
         contentSpan.textContent = truncate(displayText, 35);
@@ -995,6 +995,10 @@ export function populateSidebar(prompts, handlers, activeRecord = null) {
         item.href = url.toString();
 
         item.onclick = (e) => {
+            if (item.classList.contains('is-editing')) {
+                e.preventDefault();
+                return;
+            }
             if (e.ctrlKey || e.metaKey) return; // Allow default behavior for CTRL+Click
             e.preventDefault();
             onPromptClick(index);
