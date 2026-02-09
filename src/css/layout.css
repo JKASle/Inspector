@@ -178,8 +178,14 @@ button.search-toggle.active {
 }
 
 .recent-file-item:hover .history-checkbox-wrapper,
-.recent-file-item.selected .history-checkbox-wrapper {
+.recent-file-item.selected .history-checkbox-wrapper,
+.recent-file-item.active .history-checkbox-wrapper {
     width: 24px;
+}
+
+.recent-file-item.selected .history-checkbox-wrapper,
+.recent-file-item.active .history-checkbox-wrapper {
+    transition: none;
 }
 
 .history-checkbox-wrapper input {

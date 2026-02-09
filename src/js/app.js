@@ -569,7 +569,20 @@ function setupEventListeners() {
     document.getElementById('searchPrompts').addEventListener('input', (e) => performSearch(e.target.value));
     
     document.getElementById('clearRecentsBtn').addEventListener('click', () => {
-        clearRecentsInDB(() => loadHistory());
+        UI.showModal({
+            title: 'Clear History',
+            message: 'Are you sure you want to clear all unpinned history items? This action cannot be undone.',
+            headerColor: '#ef4444',
+            iconClass: 'ph-fill ph-trash',
+            primaryBtn: {
+                text: 'Clear All',
+                onClick: () => {
+                    clearRecentsInDB(() => loadHistory());
+                    showToast('History cleared');
+                }
+            },
+            dismissBtn: { text: 'Cancel' }
+        });
     });
     
     // View Modes
