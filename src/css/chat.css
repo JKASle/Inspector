@@ -488,17 +488,54 @@ pre code {
 }
 
 /* Print Styles for PDF Export */
+.print-only { display: none; }
+
 @media print {
     @page {
-        margin: 2cm;
+        margin: 1.5cm;
     }
 
     body {
         background: white !important;
         color: #1a1a1a !important;
-        font-family: 'Inter', -apple-system, sans-serif !important;
+        font-family: 'Inter', -apple-system, system-ui, sans-serif !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
+        line-height: 1.6 !important;
+    }
+
+    .print-only { display: block !important; }
+
+    #print-header {
+        display: flex !important;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 40px;
+        border-bottom: 2px solid #f1f5f9;
+        padding-bottom: 20px;
+        width: 100%;
+    }
+
+    .print-brand {
+        font-size: 10px;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-weight: 700;
+        margin-bottom: 10px;
+    }
+
+    #print-filename {
+        font-size: 24px;
+        font-weight: 800;
+        color: #0f172a;
+        margin-bottom: 5px;
+        text-align: center;
+    }
+
+    #print-date {
+        font-size: 12px;
+        color: #64748b;
     }
 
     #sidebar, .toolbar, #nav-widget, #media-widget, .toast, #sidebar-overlay, .message-tooltip, .code-header-actions, .collapse-code-btn, .sticky-sentinel, .edit-icon, #scrape-name-btn {
@@ -524,38 +561,45 @@ pre code {
 
     .message {
         page-break-inside: avoid;
-        margin-bottom: 30px !important;
-        border-bottom: 1px solid #eee;
-        padding-bottom: 20px !important;
+        margin-bottom: 40px !important;
+        padding-bottom: 30px !important;
+        border-bottom: 1px solid #f1f5f9;
+        position: relative;
     }
 
     .message-header {
-        color: #666 !important;
-        font-weight: bold !important;
-        font-size: 14px !important;
-        margin-bottom: 12px !important;
+        color: #475569 !important;
+        font-weight: 700 !important;
+        font-size: 13px !important;
+        margin-bottom: 15px !important;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
 
     .message-bubble {
         box-shadow: none !important;
-        border: 1px solid #eee !important;
-        background: #fff !important;
+        border: none !important;
+        background: transparent !important;
         color: #1a1a1a !important;
-        padding: 12px 16px !important;
-        border-radius: 8px !important;
+        padding: 0 !important;
+        font-size: 15px !important;
     }
 
-    .role-user .message-bubble {
-        background: #f8fafc !important;
+    .role-user .message-header {
+        color: #0f172a !important;
     }
 
     pre {
         white-space: pre-wrap !important;
         word-wrap: break-word !important;
-        background: #f1f5f9 !important;
+        background: #f8fafc !important;
         border: 1px solid #e2e8f0 !important;
-        border-radius: 6px !important;
-        padding: 12px !important;
+        border-radius: 8px !important;
+        padding: 15px !important;
+        margin: 15px 0 !important;
     }
 
     code {
@@ -570,7 +614,10 @@ pre code {
 
     .thought-message {
         background: #fdf2f8 !important; /* Rose tint for thinking */
-        border: 1px dashed #f472b6 !important;
+        border-left: 4px solid #f472b6 !important;
+        border-radius: 0 8px 8px 0 !important;
+        padding: 15px 20px !important;
+        margin-left: 10px !important;
     }
 
     .thought-message.collapsed {

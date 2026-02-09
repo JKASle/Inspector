@@ -168,6 +168,14 @@ function generateStandaloneHtml(element, title) {
  * Trigger browser print for PDF
  */
 export function exportToPdf(targetElements = null) {
+    // Populate print header
+    const printFilename = document.getElementById('print-filename');
+    const printDate = document.getElementById('print-date');
+    const currentFilename = document.getElementById('filename-display')?.title || "Untitled Conversation";
+
+    if (printFilename) printFilename.textContent = currentFilename;
+    if (printDate) printDate.textContent = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+
     if (targetElements) {
         if (!Array.isArray(targetElements)) targetElements = [targetElements];
 
@@ -245,6 +253,7 @@ export async function exportToImage(element, filename) {
             dot.style.height = '12px';
             dot.style.borderRadius = '50%';
             dot.style.backgroundColor = color;
+            dot.style.border = '1px solid rgba(0,0,0,0.1)';
             header.appendChild(dot);
         });
 
@@ -253,8 +262,30 @@ export async function exportToImage(element, filename) {
 
         // Clone the content
         const clone = element.cloneNode(true);
-        // Hide tooltips/actions in clone
-        clone.querySelectorAll('.message-tooltip, .code-header-actions, .collapse-code-btn, .sticky-sentinel').forEach(t => t.remove());
+
+        // --- Pre-capture cleanup ---
+
+        // Remove UI noise
+        clone.querySelectorAll('.message-tooltip, .code-header-actions, .collapse-code-btn, .sticky-sentinel, .edit-icon, #scrape-name-btn').forEach(t => t.remove());
+
+        // Ensure all images are loaded and have CORS set
+        const imgs = Array.from(clone.querySelectorAll('img'));
+        await Promise.all(imgs.map(img => {
+            return new Promise((resolve) => {
+                if (img.complete && img.naturalHeight !== 0) {
+                    resolve();
+                } else {
+                    img.onload = () => resolve();
+                    img.onerror = () => {
+                        console.warn("Removing broken image from export:", img.src);
+                        img.remove();
+                        resolve();
+                    };
+                    // If it's not started yet
+                    if (!img.src) resolve();
+                }
+            });
+        }));
 
         // Apply some styles to clone for better rendering in isolation
         clone.style.width = '100%';
@@ -262,30 +293,45 @@ export async function exportToImage(element, filename) {
         clone.style.opacity = '1';
         clone.style.visibility = 'visible';
         clone.style.position = 'relative';
+        clone.style.display = 'block';
 
         body.appendChild(clone);
         card.appendChild(header);
         card.appendChild(body);
         captureContainer.appendChild(card);
+
+        // Add font-face links directly to container to encourage loading in clone
+        const phosphor = document.createElement('link');
+        phosphor.rel = 'stylesheet';
+        phosphor.href = 'https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css';
+        captureContainer.appendChild(phosphor);
+
         document.body.appendChild(captureContainer);
 
         // Ensure fonts are loaded
         await document.fonts.ready;
         // Small delay to ensure rendering
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 500));
 
         const dataUrl = await htmlToImage.toPng(captureContainer, {
             width: 1000,
             pixelRatio: 2,
             backgroundColor: null,
             cacheBust: true,
+            skipFonts: false,
             style: {
                 transform: 'none',
                 opacity: '1',
                 visibility: 'visible',
                 position: 'static',
+                display: 'flex',
                 top: '0',
                 left: '0'
+            },
+            filter: (node) => {
+                // Filter out problematic elements if any
+                if (node.classList && node.classList.contains('message-tooltip')) return false;
+                return true;
             }
         });
 
@@ -298,7 +344,7 @@ export async function exportToImage(element, filename) {
         showToast("Snapshot saved");
     } catch (error) {
         console.error('Image export failed:', error);
-        showToast('Image export failed', 'error');
+        showToast('Image export failed. Try HTML or PDF.', 'ph-fill ph-x-circle');
     }
 }
 
