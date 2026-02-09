@@ -1023,3 +1023,50 @@ input[type="checkbox"]:checked::before {
     font-size: 32px;
     color: var(--text-main);
 }
+
+/* Export Popover */
+#export-popover {
+    top: calc(100% + 12px);
+    right: 0;
+    width: 180px;
+}
+
+.popover {
+    position: absolute;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    padding: 8px;
+    animation: fadeIn 0.2s ease;
+}
+
+.popover-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-main) !important;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    text-align: left;
+    transition: background 0.2s;
+}
+
+.popover-item:hover {
+    background: var(--hover-bg);
+}
+
+.popover-item i {
+    font-size: 16px;
+    color: var(--text-muted);
+}
+
+.export-options-container {
+    padding: 5px 0;
+}

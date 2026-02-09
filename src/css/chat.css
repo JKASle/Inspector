@@ -445,3 +445,57 @@ pre code {
     color: #e2e8f0;
     display: block;
 }
+
+/* Print Styles for PDF Export */
+@media print {
+    body {
+        background: white !important;
+        color: black !important;
+    }
+    #sidebar, .toolbar, #nav-widget, #media-widget, .toast, #sidebar-overlay, .message-tooltip, .code-header-actions, .collapse-code-btn {
+        display: none !important;
+    }
+    #workspace {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+    }
+    #scroll-container {
+        overflow: visible !important;
+        height: auto !important;
+    }
+    .content-wrapper {
+        width: 100% !important;
+        max-width: none !important;
+    }
+    .message {
+        page-break-inside: avoid;
+        border-bottom: 1px solid #eee;
+        padding: 20px 0;
+    }
+    .message-bubble {
+        box-shadow: none !important;
+        border: none !important;
+        background: transparent !important;
+        color: black !important;
+    }
+    pre {
+        white-space: pre-wrap !important;
+        word-wrap: break-word !important;
+        background: #f5f5f5 !important;
+        border: 1px solid #ddd !important;
+    }
+    code {
+        color: black !important;
+    }
+    .token-count {
+        display: none !important;
+    }
+    .thought-message {
+        background: #f9f9f9 !important;
+        border: 1px solid #eee !important;
+    }
+    .thought-message.collapsed {
+        display: block !important; /* Show expanded in print */
+    }
+}

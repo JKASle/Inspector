@@ -34,7 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
     UI.setNavigationContext(state, {
         onPromptClick: renderChat,
         onRename: handleRename,
-        onScrapeName: attemptScrapeName
+        onScrapeName: attemptScrapeName,
+        onExportTurn: (index) => handleExportTurn(index)
     });
 });
 
@@ -207,12 +208,14 @@ async function processAndRender(startIndex = null) {
     UI.populateSidebar(state.currentPrompts, {
         onPromptClick: (index) => handlePromptClick(index),
         onRenamePrompt: (index, newName) => handlePromptRename(index, newName),
-        onRevertPrompt: (index) => handlePromptRevert(index)
+        onRevertPrompt: (index) => handlePromptRevert(index),
+        onExportTurn: (index) => handleExportTurn(index)
     }, record);
     
     // Show main UI elements
     document.getElementById('downloadGroup').classList.remove('hidden');
     document.getElementById('exportGroup').classList.remove('hidden');
+    document.getElementById('fullExportGroup').classList.remove('hidden');
     document.getElementById('nav-widget').classList.remove('hidden');
 
     // Render specified turn or default to 0
@@ -339,6 +342,7 @@ function resetAppState() {
     document.getElementById('metadata-panel').classList.add('hidden');
     document.getElementById('downloadGroup').classList.add('hidden');
     document.getElementById('exportGroup').classList.add('hidden');
+    document.getElementById('fullExportGroup').classList.add('hidden');
     document.getElementById('nav-widget').classList.add('hidden');
     UI.showMediaButton(false);
 }
@@ -456,6 +460,100 @@ async function handlePromptRevert(index) {
     await import('./db.js').then(db => db.revertPromptNameInDB(state.currentFileRecordId, index));
     processAndRender();
     showToast("Name reverted");
+}
+
+function getChunksForTurn(index) {
+    if (!state.parsedData || !state.currentPrompts[index]) return [];
+    const userPrompt = state.currentPrompts[index];
+    const allChunks = state.parsedData.chunkedPrompt.chunks;
+    let turnChunks = [];
+    let i = userPrompt.originalIndex;
+
+    while (i < allChunks.length && allChunks[i].role === 'user') {
+        turnChunks.push(allChunks[i]);
+        i++;
+    }
+
+    for (; i < allChunks.length; i++) {
+        const chunk = allChunks[i];
+        if (chunk.role === 'model') {
+            turnChunks.push(chunk);
+        } else if (chunk.role === 'user') break;
+    }
+    return turnChunks;
+}
+
+async function handleExportTurn(index) {
+    const turnChunks = getChunksForTurn(index);
+    const filename = `${state.currentFileName}_Turn_${index + 1}`;
+
+    const container = document.createElement('div');
+    container.className = 'export-options-container';
+    container.innerHTML = `
+        <div class="flex-column gap-10">
+            <button class="btn btn-secondary w-full" data-format="html"><i class="ph ph-code"></i> HTML</button>
+            <button class="btn btn-secondary w-full" data-format="markdown"><i class="ph ph-markdown-logo"></i> Markdown</button>
+            <button class="btn btn-secondary w-full" data-format="pdf"><i class="ph ph-file-pdf"></i> PDF</button>
+            <button class="btn btn-secondary w-full" data-format="txt"><i class="ph ph-file-txt"></i> TXT</button>
+            <button class="btn btn-secondary w-full" data-format="image"><i class="ph ph-image"></i> Image</button>
+        </div>
+    `;
+
+    const { exportToMarkdown, exportToTxt, exportToHtml, exportToPdf, exportToImage } = await import('./export.js');
+
+    container.querySelectorAll('button').forEach(btn => {
+        btn.onclick = async () => {
+            const format = btn.dataset.format;
+            document.getElementById('generic-modal').classList.add('hidden');
+
+            if (format === 'markdown') {
+                exportToMarkdown(turnChunks, filename);
+            } else if (format === 'txt') {
+                exportToTxt(turnChunks, filename);
+            } else if (format === 'pdf') {
+                if (!prefs.isScrollMode && state.focusIndex === index) {
+                    exportToPdf();
+                } else {
+                    const chatStream = document.getElementById('chat-stream');
+                    const oldHtml = chatStream.innerHTML;
+                    UI.renderConversation(state.parsedData, index, state.currentPrompts);
+                    setTimeout(() => {
+                        exportToPdf();
+                        // State restoration is best-effort
+                    }, 100);
+                }
+            } else if (format === 'html') {
+                const chatStream = document.getElementById('chat-stream');
+                if (!prefs.isScrollMode && state.focusIndex === index) {
+                    exportToHtml(chatStream, `Turn ${index + 1} Export`, filename);
+                } else {
+                    const oldHtml = chatStream.innerHTML;
+                    UI.renderConversation(state.parsedData, index, state.currentPrompts);
+                    exportToHtml(chatStream, `Turn ${index + 1} Export`, filename);
+                    chatStream.innerHTML = oldHtml;
+                }
+            } else if (format === 'image') {
+                const chatStream = document.getElementById('chat-stream');
+                if (!prefs.isScrollMode && state.focusIndex === index) {
+                    exportToImage(chatStream, filename);
+                } else {
+                    const oldHtml = chatStream.innerHTML;
+                    UI.renderConversation(state.parsedData, index, state.currentPrompts);
+                    await exportToImage(chatStream, filename);
+                    chatStream.innerHTML = oldHtml;
+                }
+            }
+        };
+    });
+
+    UI.showModal({
+        title: 'Export Turn',
+        message: 'Choose a format to export this turn:',
+        headerColor: 'var(--accent-primary)',
+        iconClass: 'ph ph-download-simple',
+        extraContent: container,
+        dismissBtn: { text: 'Cancel' }
+    });
 }
 
 function performSearch(term) {
@@ -624,6 +722,90 @@ function setupEventListeners() {
     });
 
     document.getElementById('searchPrompts').addEventListener('input', (e) => performSearch(e.target.value));
+
+    // Full Export Logic
+    const fullExportBtn = document.getElementById('fullExportBtn');
+    const fullExportTrigger = document.getElementById('fullExportTrigger');
+    const exportPopover = document.getElementById('export-popover');
+
+    fullExportBtn.addEventListener('click', () => {
+        handleFullExport('html');
+    });
+
+    fullExportTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        exportPopover.classList.toggle('hidden');
+    });
+
+    exportPopover.querySelectorAll('.popover-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const format = item.dataset.format;
+            exportPopover.classList.add('hidden');
+            handleFullExport(format);
+        });
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!exportPopover.contains(e.target) && e.target !== fullExportTrigger) {
+            exportPopover.classList.add('hidden');
+        }
+    });
+
+    async function handleFullExport(format) {
+        if (!state.parsedData) return;
+        const { exportToMarkdown, exportToTxt, exportToHtml, exportToPdf, exportToImage } = await import('./export.js');
+        const filename = state.currentFileName;
+        const allChunks = state.parsedData.chunkedPrompt.chunks;
+
+        if (format === 'markdown') {
+            exportToMarkdown(allChunks, filename);
+        } else if (format === 'txt') {
+            exportToTxt(allChunks, filename);
+        } else if (format === 'pdf') {
+            if (prefs.isScrollMode) {
+                exportToPdf();
+            } else {
+                UI.showModal({
+                    title: 'Export PDF',
+                    message: 'PDF export works best in Timeline (Scroll) mode. Switch and export?',
+                    headerColor: 'var(--accent-primary)',
+                    iconClass: 'ph ph-file-pdf',
+                    primaryBtn: {
+                        text: 'Switch & Export',
+                        onClick: () => {
+                            const toggle = document.getElementById('sidebarModeToggle');
+                            toggle.checked = true;
+                            toggle.dispatchEvent(new Event('change'));
+                            setTimeout(() => exportToPdf(), 500);
+                        }
+                    },
+                    dismissBtn: { text: 'Cancel' }
+                });
+            }
+        } else if (format === 'html') {
+            const chatStream = document.getElementById('chat-stream');
+            if (prefs.isScrollMode) {
+                exportToHtml(chatStream, state.currentFileName, filename);
+            } else {
+                 const oldHtml = chatStream.innerHTML;
+                 const oldView = chatStream.getAttribute('data-view');
+                 UI.renderFullConversation(state.parsedData, state.currentPrompts);
+                 exportToHtml(chatStream, state.currentFileName, filename);
+                 if (oldView === 'full') UI.renderFullConversation(state.parsedData, state.currentPrompts);
+                 else UI.renderConversation(state.parsedData, state.focusIndex, state.currentPrompts);
+            }
+        } else if (format === 'image') {
+            const chatStream = document.getElementById('chat-stream');
+            if (prefs.isScrollMode) {
+                showToast("Capturing long conversation as image... this may take a moment.");
+                exportToImage(chatStream, filename);
+            } else {
+                UI.renderFullConversation(state.parsedData, state.currentPrompts);
+                await exportToImage(chatStream, filename);
+                UI.renderConversation(state.parsedData, state.focusIndex, state.currentPrompts);
+            }
+        }
+    }
     
     document.getElementById('clearRecentsBtn').addEventListener('click', () => {
         UI.showModal({
