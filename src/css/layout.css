@@ -478,10 +478,67 @@ button.search-toggle.active {
 }
 
 .prompt-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 13px;
+    font-family: inherit;
+    text-decoration: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.prompt-item-content {
+    flex: 1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    display: block;
+    pointer-events: none;
+}
+
+.prompt-item.is-edited i:first-child {
+    color: var(--accent-primary);
+    filter: saturate(0.5); /* Subtle change as requested */
+}
+
+.prompt-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    background: var(--hover-bg);
+    padding-left: 8px;
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.prompt-item:hover .prompt-item-actions,
+.prompt-item.is-editing .prompt-item-actions {
+    opacity: 1;
+}
+
+.prompt-rename-input {
+    background: var(--bg-surface);
+    border: 1px solid var(--accent-primary);
+    color: var(--text-main);
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 13px;
+    width: 100%;
+    outline: none;
+    font-family: inherit;
 }
 
 .sidebar-footer {

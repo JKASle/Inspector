@@ -40,52 +40,80 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function handleInitialLoad() {
     const urlParams = new URLSearchParams(window.location.search);
-    let fileId = urlParams.get('view') || urlParams.get('id') || urlParams.get('chat');
-    const historyId = urlParams.get('h') || urlParams.get('localId');
 
-    if (historyId) {
-        getFileById(Number(historyId), (record) => {
+    // Support all variants including new ones
+    let fileId = urlParams.get('view') || urlParams.get('id') || urlParams.get('chat') || urlParams.get('remoteId');
+    let localId = urlParams.get('local') || urlParams.get('h') || urlParams.get('localId');
+    const turn = urlParams.get('turn');
+    const scrollTo = urlParams.get('scrollTo');
+
+    // Path routing check (expanded)
+    const pathSegments = window.location.pathname.split('/').filter(seg => seg && seg !== 'index.html');
+    if (pathSegments.length > 0) {
+        const lastSegment = pathSegments[pathSegments.length - 1];
+        // If it's numeric, treat as localId, else as fileId
+        if (/^\d+$/.test(lastSegment)) {
+            if (!localId) localId = lastSegment;
+        } else if (lastSegment.length > 20) {
+            if (!fileId) fileId = lastSegment;
+        }
+    }
+
+    // Hash routing check
+    if (!fileId && !localId && window.location.hash) {
+        let hashVal = window.location.hash.substring(1);
+        if (hashVal.startsWith('/')) hashVal = hashVal.substring(1);
+        if (/^\d+$/.test(hashVal)) {
+            localId = hashVal;
+        } else if (/^[a-zA-Z0-9_-]+$/.test(hashVal) && hashVal.length > 20) {
+            fileId = hashVal;
+        }
+    }
+
+    const targetIndex = (turn !== null) ? parseInt(turn) : (scrollTo !== null ? parseInt(scrollTo) : null);
+    if (scrollTo !== null) prefs.isScrollMode = true;
+    else if (turn !== null) prefs.isScrollMode = false;
+
+    if (localId) {
+        getFileById(Number(localId), (record) => {
             if (record) {
-                loadFileFromRecord(record);
+                loadFileFromRecord(record, targetIndex);
             }
         });
         return;
     }
 
-    // Hash routing check
-    if (!fileId && window.location.hash) {
-        let hashVal = window.location.hash.substring(1);
-        if (hashVal.startsWith('/')) hashVal = hashVal.substring(1);
-        if (/^[a-zA-Z0-9_-]+$/.test(hashVal) && hashVal.length > 20) {
-            fileId = hashVal;
-        }
-    }
-
-    // Path routing check
-    if (!fileId) {
-        const pathSegments = window.location.pathname.split('/').filter(seg => seg && seg !== 'index.html');
-        if (pathSegments.length > 0) {
-            const lastSegment = pathSegments[pathSegments.length - 1];
-            if (/^[a-zA-Z0-9_-]+$/.test(lastSegment) && lastSegment.length > 20) {
-                fileId = lastSegment;
-            }
-        }
-    }
-
     if (fileId) {
-        if (prefs.autoRestoreContent) {
-            loadFromDrive(fileId);
+        // Double check if fileId is actually a local numeric ID
+        if (/^\d+$/.test(fileId)) {
+            getFileById(Number(fileId), (record) => {
+                if (record) {
+                    loadFileFromRecord(record, targetIndex);
+                } else {
+                    tryLoadFromDrive(fileId, targetIndex);
+                }
+            });
         } else {
-            UI.showConfirmModal(
-                `Do you want to load this file (${truncate(fileId, 15)})?`,
-                () => loadFromDrive(fileId),
-                () => updateUrl(null)
-            );
+            tryLoadFromDrive(fileId, targetIndex);
         }
     } else if (prefs.openLastFileOnStartup) {
         loadLastFileFromDB((fileRecord) => {
-            loadFileFromRecord(fileRecord);
+            if (fileRecord) {
+                loadFileFromRecord(fileRecord, targetIndex);
+            }
         });
+    }
+}
+
+function tryLoadFromDrive(id, onLoaded) {
+    if (prefs.autoRestoreContent) {
+        loadFromDrive(id, onLoaded);
+    } else {
+        UI.showConfirmModal(
+            `Do you want to load this file (${truncate(id, 15)})?`,
+            () => loadFromDrive(id, onLoaded),
+            () => updateUrl(null)
+        );
     }
 }
 
@@ -98,7 +126,7 @@ function handleFile(file) {
     reader.readAsText(file);
 }
 
-function handleText(text, name, driveId = null) {
+function handleText(text, name, driveId = null, startIndex = null) {
     try {
         const result = parseConversation(text);
         state.parsedData = result.data;
@@ -116,7 +144,7 @@ function handleText(text, name, driveId = null) {
             state.currentFileRecordId = id;
             state.currentFileName = finalName;
             loadHistory();
-            processAndRender();
+            processAndRender(startIndex);
         });
         UI.hideLoading();
     } catch (e) {
@@ -126,7 +154,7 @@ function handleText(text, name, driveId = null) {
     }
 }
 
-function loadFileFromRecord(record) {
+function loadFileFromRecord(record, startIndex = null) {
     UI.showLoading();
     state.currentFileName = record.name;
     state.currentFileId = record.driveId || null;
@@ -138,29 +166,31 @@ function loadFileFromRecord(record) {
     const result = parseConversation(state.rawContent);
     state.currentPrompts = result.prompts;
     
-    processAndRender();
+    processAndRender(startIndex);
     loadHistory();
     UI.hideLoading();
 }
 
-function loadFromDrive(id) {
+function loadFromDrive(id, startIndex = null) {
     UI.showLoading();
     updateUrl(id);
     state.currentFileId = id;
     fetchDriveFile(id, {
-        onSuccess: (text) => handleText(text, `Drive File (${id})`, id),
+        onSuccess: (text) => {
+            handleText(text, `Drive File (${id})`, id, startIndex);
+        },
         onError: (err) => {
             UI.hideLoading();
             if (err.message === "Private File / HTML content") {
-                UI.showError("Access Denied", "This file appears to be private.", true, () => loadFromDrive(id), id);
+                UI.showError("Access Denied", "This file appears to be private.", true, () => loadFromDrive(id, startIndex), id);
             } else {
-                UI.showError("Network Error", "Failed to fetch file. CodeTabs proxy might be down or blocked.", false, () => loadFromDrive(id), id);
+                UI.showError("Network Error", "Failed to fetch file. CodeTabs proxy might be down or blocked.", false, () => loadFromDrive(id, startIndex), id);
             }
         }
     });
 }
 
-function processAndRender() {
+async function processAndRender(startIndex = null) {
     UI.updateRenamingUI(state.currentFileName, state.currentFileId);
     document.title = `${state.currentFileName} | Inspector`;
     
@@ -173,15 +203,22 @@ function processAndRender() {
     UI.showMediaButton(state.extractedMedia.length > 0);
     
     // Sidebar
-    UI.populateSidebar(state.currentPrompts, (index) => handlePromptClick(index));
+    const record = await getFileById(state.currentFileRecordId);
+    UI.populateSidebar(state.currentPrompts, {
+        onPromptClick: (index) => handlePromptClick(index),
+        onRenamePrompt: (index, newName) => handlePromptRename(index, newName),
+        onRevertPrompt: (index) => handlePromptRevert(index)
+    }, record);
     
     // Show main UI elements
     document.getElementById('downloadGroup').classList.remove('hidden');
     document.getElementById('exportGroup').classList.remove('hidden');
     document.getElementById('nav-widget').classList.remove('hidden');
 
-    // Render first turn
-    if (state.currentPrompts.length > 0) {
+    // Render specified turn or default to 0
+    if (startIndex !== null) {
+        handlePromptClick(startIndex);
+    } else if (state.currentPrompts.length > 0) {
         renderChat(0);
     } else {
         UI.renderFullConversation(state.parsedData, []);
@@ -195,6 +232,7 @@ function handlePromptClick(index) {
         if (target) {
             target.scrollIntoView({ behavior: 'smooth', block: 'start' });
             UI.setActiveSidebarItem(index);
+            updateUrl(state.currentFileId, state.currentFileRecordId, null, index);
         } else {
             // If in scroll mode but not rendered (e.g. switch just happened), render full
             renderCompleteDialog();
@@ -209,6 +247,11 @@ function handlePromptClick(index) {
 function renderChat(index) {
     state.focusIndex = index;
     UI.renderConversation(state.parsedData, index, state.currentPrompts);
+    if (prefs.isScrollMode) {
+        updateUrl(state.currentFileId, state.currentFileRecordId, null, index);
+    } else {
+        updateUrl(state.currentFileId, state.currentFileRecordId, index);
+    }
 }
 
 function renderCompleteDialog() {
@@ -401,6 +444,20 @@ async function finalizeRename(id, newName) {
     loadHistory();
 }
 
+async function handlePromptRename(index, newName) {
+    if (!state.currentFileRecordId) return;
+    await import('./db.js').then(db => db.updatePromptNameInDB(state.currentFileRecordId, index, newName));
+    processAndRender();
+    showToast("Prompt group renamed");
+}
+
+async function handlePromptRevert(index) {
+    if (!state.currentFileRecordId) return;
+    await import('./db.js').then(db => db.revertPromptNameInDB(state.currentFileRecordId, index));
+    processAndRender();
+    showToast("Name reverted");
+}
+
 function performSearch(term) {
     term = term.toLowerCase();
     if (!term) {
@@ -591,7 +648,15 @@ function setupEventListeners() {
         // Don't save strictly to localstorage here if it's per-session, but original did specific logic
         if (!state.parsedData) return;
         UI.showLoading();
-        setTimeout(() => {
+        setTimeout(async () => {
+            // Re-populate sidebar to update <a> hrefs
+            const record = await getFileById(state.currentFileRecordId);
+            UI.populateSidebar(state.currentPrompts, {
+                onPromptClick: (index) => handlePromptClick(index),
+                onRenamePrompt: (index, newName) => handlePromptRename(index, newName),
+                onRevertPrompt: (index) => handlePromptRevert(index)
+            }, record);
+
             if (prefs.isScrollMode) renderCompleteDialog();
             else renderChat(state.focusIndex);
             UI.hideLoading();

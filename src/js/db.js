@@ -22,17 +22,31 @@ export function initDB(onLoadCallback) {
 export function saveFileToHistory(fileObj, callback) {
     if (!db) return;
 
-    const doSave = (finalName) => {
+    const doSave = async (finalName) => {
+        // Try to find existing record to preserve metadata
+        let existingRecord = null;
+        if (fileObj.id) {
+            existingRecord = await getFileById(fileObj.id);
+        } else if (fileObj.driveId) {
+            const transaction = db.transaction([STORE_NAME], 'readonly');
+            const store = transaction.objectStore(STORE_NAME);
+            const all = await new Promise(resolve => {
+                store.getAll().onsuccess = (e) => resolve(e.target.result);
+            });
+            existingRecord = all.find(f => f.driveId === fileObj.driveId);
+        }
+
         const transaction = db.transaction([STORE_NAME], 'readwrite');
         const store = transaction.objectStore(STORE_NAME);
         const record = {
-            id: fileObj.id || Date.now(),
+            id: fileObj.id || (existingRecord ? existingRecord.id : Date.now()),
             name: finalName,
             data: fileObj.data,
             raw: fileObj.raw,
-            driveId: fileObj.driveId || null,
+            driveId: fileObj.driveId || (existingRecord ? existingRecord.driveId : null),
             timestamp: Date.now(),
-            pinned: fileObj.pinned || false
+            pinned: fileObj.pinned || (existingRecord ? existingRecord.pinned : false),
+            customPromptNames: existingRecord ? existingRecord.customPromptNames : {}
         };
         store.put(record);
         transaction.oncomplete = () => {
@@ -191,6 +205,45 @@ export function deleteFileFromDB(id, callback) {
         const tx = db.transaction([STORE_NAME], 'readwrite');
         const store = tx.objectStore(STORE_NAME);
         store.delete(id);
+        tx.oncomplete = () => resolve();
+    });
+    if (callback) promise.then(callback);
+    else return promise;
+}
+
+export function updatePromptNameInDB(id, promptIndex, newName, callback) {
+    if (!db) return callback ? callback() : Promise.resolve();
+    const promise = new Promise((resolve) => {
+        const tx = db.transaction([STORE_NAME], 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.get(id);
+        req.onsuccess = () => {
+            const record = req.result;
+            if (record) {
+                if (!record.customPromptNames) record.customPromptNames = {};
+                record.customPromptNames[promptIndex] = newName;
+                store.put(record);
+            }
+        };
+        tx.oncomplete = () => resolve();
+    });
+    if (callback) promise.then(callback);
+    else return promise;
+}
+
+export function revertPromptNameInDB(id, promptIndex, callback) {
+    if (!db) return callback ? callback() : Promise.resolve();
+    const promise = new Promise((resolve) => {
+        const tx = db.transaction([STORE_NAME], 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.get(id);
+        req.onsuccess = () => {
+            const record = req.result;
+            if (record && record.customPromptNames) {
+                delete record.customPromptNames[promptIndex];
+                store.put(record);
+            }
+        };
         tx.oncomplete = () => resolve();
     });
     if (callback) promise.then(callback);

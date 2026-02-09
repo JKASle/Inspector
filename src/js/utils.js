@@ -26,17 +26,28 @@ export function showToast(message, iconClass = 'ph-fill ph-check-circle') {
     }
 }
 
-export function updateUrl(id, localId = null) {
+export function updateUrl(id, localId = null, turn = null, scrollTo = null) {
     try {
         const newUrl = new URL(window.location);
-        // Clear all possible ID params to start fresh
-        const paramsToRemove = ['id', 'chat', 'view', 'h', 'localId'];
+        // Clear all possible ID and positioning params to start fresh
+        const paramsToRemove = ['id', 'chat', 'view', 'h', 'localId', 'local', 'remoteId', 'turn', 'scrollTo'];
         paramsToRemove.forEach(p => newUrl.searchParams.delete(p));
 
         if (localId) {
-            newUrl.searchParams.set('h', localId);
+            newUrl.searchParams.set('local', localId);
         } else if (id) {
-            newUrl.searchParams.set('view', id);
+            // If the ID is purely numeric, it's likely a local IndexedDB ID
+            if (/^\d+$/.test(id)) {
+                newUrl.searchParams.set('local', id);
+            } else {
+                newUrl.searchParams.set('view', id);
+            }
+        }
+
+        if (turn !== null) {
+            newUrl.searchParams.set('turn', turn);
+        } else if (scrollTo !== null) {
+            newUrl.searchParams.set('scrollTo', scrollTo);
         }
 
         window.history.pushState({}, '', newUrl);
