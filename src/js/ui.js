@@ -920,7 +920,7 @@ export function showMediaButton(show) {
     }
 }
 
-export function populateSidebar(prompts, onPromptClick) {
+export function populateSidebar(prompts, handlers, activeRecord = null) {
     const list = document.getElementById('prompt-list');
     list.innerHTML = '';
     
@@ -929,17 +929,42 @@ export function populateSidebar(prompts, onPromptClick) {
         return;
     }
 
+    const { onPromptClick, onRenamePrompt, onRevertPrompt } = handlers;
+    const customNames = (activeRecord && activeRecord.customPromptNames) ? activeRecord.customPromptNames : {};
+
     prompts.forEach((p, index) => {
-        const btn = document.createElement('button');
-        btn.className = 'prompt-item';
+        const item = document.createElement('a');
+        item.className = 'prompt-item';
         
         const mediaCount = p.mediaCount || 0;
-        let promptText = p.text ? p.text.trim() : "";
+        let originalText = p.text ? p.text.trim() : "";
         
+        // --- Label Logic ---
+        if (!originalText) {
+            if (mediaCount > 0) {
+                const types = p.mediaTypes || [];
+                const uniqueTypes = [...new Set(types)];
+                
+                if (uniqueTypes.length === 1) {
+                    const type = uniqueTypes[0];
+                    const suffix = mediaCount > 1 ? 's' : '';
+                    originalText = `[Uploaded ${mediaCount > 1 ? mediaCount + ' ' : ''}${type}${suffix}]`;
+                } else {
+                    originalText = `[Uploaded ${mediaCount} Files]`;
+                }
+            } else {
+                originalText = "[Empty Message]";
+            }
+        }
+
+        const isEdited = !!customNames[index];
+        const displayText = customNames[index] || originalText;
+        if (isEdited) item.classList.add('is-edited');
+
         // --- Icon Logic ---
         let iconHtml = '';
         const baseIconClass = (mediaCount > 0) ? "ph ph-paperclip" : "ph ph-chat-circle";
-        
+
         if (mediaCount > 1) {
             // Icon + Badge
             iconHtml = `<i class="${baseIconClass} icon-wrapper"><span class="icon-badge">${mediaCount}</span></i>`;
@@ -948,36 +973,143 @@ export function populateSidebar(prompts, onPromptClick) {
             iconHtml = `<i class="${baseIconClass}"></i>`;
         }
 
-        // --- Label Logic ---
-        if (!promptText) {
-            if (mediaCount > 0) {
-                const types = p.mediaTypes || [];
-                const uniqueTypes = [...new Set(types)];
-                
-                if (uniqueTypes.length === 1) {
-                    const type = uniqueTypes[0];
-                    const suffix = mediaCount > 1 ? 's' : '';
-                    promptText = `[Uploaded ${mediaCount > 1 ? mediaCount + ' ' : ''}${type}${suffix}]`;
-                } else {
-                    promptText = `[Uploaded ${mediaCount} Files]`;
-                }
-            } else {
-                promptText = "[Empty Message]";
-            }
+        const contentSpan = document.createElement('span');
+        contentSpan.className = 'prompt-item-content';
+        contentSpan.textContent = truncate(displayText, 35);
+
+        item.innerHTML = iconHtml;
+        item.appendChild(contentSpan);
+
+        item.title = displayText;
+        item.dataset.index = index;
+
+        // URL construction for CTRL+Click
+        const url = new URL(window.location);
+        url.searchParams.delete('turn');
+        url.searchParams.delete('scrollTo');
+        if (prefs.isScrollMode) {
+            url.searchParams.set('scrollTo', index);
+        } else {
+            url.searchParams.set('turn', index);
         }
-        
-        btn.innerHTML = `${iconHtml} ${truncate(promptText, 35)}`;
-        btn.title = promptText;
-        btn.dataset.index = index;
-        btn.onclick = () => onPromptClick(index);
-        list.appendChild(btn);
+        item.href = url.toString();
+
+        item.onclick = (e) => {
+            if (item.classList.contains('is-editing')) {
+                e.preventDefault();
+                return;
+            }
+            if (e.ctrlKey || e.metaKey) return; // Allow default behavior for CTRL+Click
+            e.preventDefault();
+            onPromptClick(index);
+        };
+
+        // Actions Group (Rename, Revert)
+        const actionsGroup = document.createElement('div');
+        actionsGroup.className = 'prompt-item-actions';
+
+        const renameBtn = document.createElement('button');
+        renameBtn.className = 'history-action-btn';
+        renameBtn.title = 'Rename Prompt Group';
+        renameBtn.innerHTML = '<i class="ph ph-pencil-simple"></i>';
+        renameBtn.onclick = (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            startPromptRename(index, displayText, item, onRenamePrompt);
+        };
+
+        actionsGroup.appendChild(renameBtn);
+
+        if (isEdited) {
+            const revertBtn = document.createElement('button');
+            revertBtn.className = 'history-action-btn';
+            revertBtn.title = 'Revert to Original Prompt';
+            revertBtn.innerHTML = '<i class="ph ph-arrow-u-up-left"></i>';
+            revertBtn.onclick = (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onRevertPrompt(index);
+            };
+            actionsGroup.appendChild(revertBtn);
+        }
+
+        item.appendChild(actionsGroup);
+        list.appendChild(item);
     });
+}
+
+function startPromptRename(index, currentName, itemEl, onSave) {
+    const contentSpan = itemEl.querySelector('.prompt-item-content');
+    if (!contentSpan) return;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'prompt-rename-input';
+    input.value = currentName;
+    input.spellcheck = false;
+    input.onclick = (e) => e.stopPropagation();
+    input.onmousedown = (e) => e.stopPropagation();
+
+    itemEl.classList.add('is-editing');
+    itemEl.replaceChild(input, contentSpan);
+    input.focus();
+    input.select();
+
+    const finish = (save) => {
+        if (!itemEl.classList.contains('is-editing')) return;
+        const newName = input.value.trim();
+
+        if (save && newName && newName !== currentName) {
+            onSave(index, newName);
+        } else {
+            // Revert UI immediately if not saving or no change
+            itemEl.classList.remove('is-editing');
+            if (itemEl.contains(input)) itemEl.replaceChild(contentSpan, input);
+        }
+    };
+
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            finish(true);
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            finish(false);
+        }
+    };
+
+    input.onblur = () => finish(false);
 }
 
 export function setActiveSidebarItem(index) {
     document.querySelectorAll('.prompt-item').forEach(e => e.classList.remove('active'));
     const target = document.querySelector(`.prompt-item[data-index="${index}"]`);
-    if(target) target.classList.add('active');
+    if(target) {
+        target.classList.add('active');
+        // Optional: ensure visible
+        if (!isElementInViewport(target)) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    }
+}
+
+function isElementInViewport(el) {
+    const rect = el.getBoundingClientRect();
+    const parent = el.parentElement.getBoundingClientRect();
+    return (
+        rect.top >= parent.top &&
+        rect.bottom <= parent.bottom
+    );
+}
+
+export function setNavigationMode(isScrollMode) {
+    const toggle = document.getElementById('sidebarModeToggle');
+    if (toggle) {
+        toggle.checked = isScrollMode;
+        // The event listener in app.js will handle the re-render if we dispatch change
+        toggle.dispatchEvent(new Event('change'));
+    }
 }
 
 export function renderHistoryLists(recentFiles, pinnedFiles, handlers, activeId = null) {
@@ -1311,6 +1443,11 @@ export function renderFullConversation(parsedData, promptsList) {
             const id = visible[0].target.id;
             const idx = id.split('-').pop();
             setActiveSidebarItem(idx);
+
+            // Update URL with scrollTo if in scroll mode
+            if (prefs.isScrollMode && _appState) {
+                updateUrl(_appState.currentFileId, _appState.currentFileRecordId, null, idx);
+            }
         }
     }, { root: els.scrollContainer, threshold: 0.1 });
     
