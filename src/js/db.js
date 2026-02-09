@@ -185,6 +185,51 @@ export function clearRecentsInDB(callback) {
     };
 }
 
+export function deleteFileFromDB(id, callback) {
+    if (!db) return callback ? callback() : Promise.resolve();
+    const promise = new Promise((resolve) => {
+        const tx = db.transaction([STORE_NAME], 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.delete(id);
+        tx.oncomplete = () => resolve();
+    });
+    if (callback) promise.then(callback);
+    else return promise;
+}
+
+export function bulkDeleteFromDB(ids, callback) {
+    if (!db) return callback ? callback() : Promise.resolve();
+    const promise = new Promise((resolve) => {
+        const tx = db.transaction([STORE_NAME], 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        ids.forEach(id => store.delete(id));
+        tx.oncomplete = () => resolve();
+    });
+    if (callback) promise.then(callback);
+    else return promise;
+}
+
+export function bulkPinInDB(ids, pinnedStatus, callback) {
+    if (!db) return callback ? callback() : Promise.resolve();
+    const promise = new Promise((resolve) => {
+        const tx = db.transaction([STORE_NAME], 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        ids.forEach(id => {
+            const req = store.get(id);
+            req.onsuccess = () => {
+                const data = req.result;
+                if (data) {
+                    data.pinned = pinnedStatus;
+                    store.put(data);
+                }
+            };
+        });
+        tx.oncomplete = () => resolve();
+    });
+    if (callback) promise.then(callback);
+    else return promise;
+}
+
 function cleanupHistory() {
     if (!db) return;
     const tx = db.transaction([STORE_NAME], 'readwrite');

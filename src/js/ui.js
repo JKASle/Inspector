@@ -18,6 +18,8 @@ function saveAccess(id, status) {
 
 let currentViewingText = ""; // State for manual language updates
 let currentFileRecordId = null;
+let selectedHistoryIds = new Set();
+let _historyHandlers = {};
 
 export function setCurrentFileRecordId(id) {
     currentFileRecordId = id;
@@ -979,7 +981,8 @@ export function setActiveSidebarItem(index) {
 }
 
 export function renderHistoryLists(recentFiles, pinnedFiles, handlers, activeId = null) {
-    const { onLoad, onTogglePin } = handlers;
+    _historyHandlers = handlers;
+    const { onLoad, onTogglePin, onDelete, onRename, onBulkDelete, onBulkPin } = handlers;
     if (activeId) currentFileRecordId = activeId;
     
     els.historySection.classList.toggle('hidden', recentFiles.length === 0 && pinnedFiles.length === 0);
@@ -987,6 +990,9 @@ export function renderHistoryLists(recentFiles, pinnedFiles, handlers, activeId 
     const createItem = (file) => {
         const div = document.createElement('div');
         div.className = 'recent-file-item';
+        div.dataset.id = file.id;
+        if (selectedHistoryIds.has(file.id)) div.classList.add('selected');
+
         if (currentFileRecordId && file.id === currentFileRecordId) {
             div.classList.add('active');
         } else if (!currentFileRecordId && file.name === els.filenameDisplay.title) {
@@ -995,9 +1001,53 @@ export function renderHistoryLists(recentFiles, pinnedFiles, handlers, activeId 
         
         div.onclick = () => onLoad(file);
 
+        // Checkbox for bulk selection
+        const cbWrapper = document.createElement('div');
+        cbWrapper.className = 'history-checkbox-wrapper';
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = selectedHistoryIds.has(file.id);
+        checkbox.onclick = (e) => {
+            e.stopPropagation();
+            toggleHistorySelection(file.id);
+        };
+        cbWrapper.appendChild(checkbox);
+
         const nameGroup = document.createElement('div');
         nameGroup.className = 'file-name-group';
-        nameGroup.innerHTML = `<i class="ph ph-file-text"></i> <span class="file-text" title="${file.name}">${truncate(file.name, 22)}</span>`;
+
+        const fileIcon = document.createElement('i');
+        fileIcon.className = 'ph ph-file-text';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'file-text';
+        nameSpan.textContent = truncate(file.name, 22);
+        nameSpan.title = file.name;
+
+        nameGroup.appendChild(fileIcon);
+        nameGroup.appendChild(nameSpan);
+
+        // Actions Group (Rename, Delete, Pin)
+        const actionsGroup = document.createElement('div');
+        actionsGroup.className = 'history-item-actions';
+
+        const renameBtn = document.createElement('button');
+        renameBtn.className = 'history-action-btn';
+        renameBtn.title = 'Rename';
+        renameBtn.innerHTML = '<i class="ph ph-pencil-simple"></i>';
+        renameBtn.onclick = (e) => {
+            e.stopPropagation();
+            startHistoryRename(file, div);
+        };
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'history-action-btn delete';
+        deleteBtn.title = 'Delete';
+        deleteBtn.innerHTML = '<i class="ph ph-trash"></i>';
+        deleteBtn.onclick = (e) => {
+            e.stopPropagation();
+            confirmDeleteHistory(file);
+        };
 
         const pinBtn = document.createElement('button');
         pinBtn.className = `pin-btn ${file.pinned ? 'is-pinned' : ''}`;
@@ -1017,8 +1067,13 @@ export function renderHistoryLists(recentFiles, pinnedFiles, handlers, activeId 
             pinBtn.onmouseleave = () => pinBtn.querySelector('i').className = 'ph-fill ph-push-pin';
         }
 
+        actionsGroup.appendChild(renameBtn);
+        actionsGroup.appendChild(deleteBtn);
+        actionsGroup.appendChild(pinBtn);
+
+        div.appendChild(cbWrapper);
         div.appendChild(nameGroup);
-        div.appendChild(pinBtn);
+        div.appendChild(actionsGroup);
         return div;
     };
 
@@ -1027,6 +1082,155 @@ export function renderHistoryLists(recentFiles, pinnedFiles, handlers, activeId 
     
     els.pinnedList.innerHTML = '';
     pinnedFiles.forEach(f => els.pinnedList.appendChild(createItem(f)));
+
+    updateBulkBar();
+}
+
+function toggleHistorySelection(id) {
+    if (selectedHistoryIds.has(id)) {
+        selectedHistoryIds.delete(id);
+    } else {
+        selectedHistoryIds.add(id);
+    }
+
+    // Update UI elements
+    const items = document.querySelectorAll(`.recent-file-item[data-id="${id}"]`);
+    items.forEach(item => {
+        item.classList.toggle('selected', selectedHistoryIds.has(id));
+        const cb = item.querySelector('.history-checkbox-wrapper input');
+        if (cb) cb.checked = selectedHistoryIds.has(id);
+    });
+
+    updateBulkBar();
+}
+
+function updateBulkBar() {
+    let bar = document.getElementById('bulk-history-bar');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'bulk-history-bar';
+        bar.className = 'bulk-history-bar hidden';
+        const historySection = document.getElementById('history-section');
+        const tabs = historySection.querySelector('.sidebar-mini-tabs');
+        if (tabs) tabs.parentNode.insertBefore(bar, tabs.nextSibling);
+    }
+
+    if (selectedHistoryIds.size > 0) {
+        bar.classList.remove('hidden');
+        bar.innerHTML = `
+            <div class="bulk-info">
+                <button id="cancel-bulk-btn" class="icon-btn-sm" title="Clear Selection"><i class="ph ph-x"></i></button>
+                <span><b>${selectedHistoryIds.size}</b> selected</span>
+            </div>
+            <div class="bulk-actions">
+                <button id="bulk-pin-btn" class="bulk-action-btn" title="Pin all selected"><i class="ph-fill ph-push-pin"></i></button>
+                <button id="bulk-unpin-btn" class="bulk-action-btn" title="Unpin all selected"><i class="ph ph-push-pin-slash"></i></button>
+                <button id="bulk-delete-btn" class="bulk-action-btn delete" title="Delete selected"><i class="ph ph-trash"></i></button>
+            </div>
+        `;
+
+        document.getElementById('cancel-bulk-btn').onclick = () => {
+            selectedHistoryIds.clear();
+            document.querySelectorAll('.recent-file-item.selected').forEach(el => el.classList.remove('selected'));
+            document.querySelectorAll('.history-checkbox-wrapper input').forEach(el => el.checked = false);
+            updateBulkBar();
+        };
+
+        document.getElementById('bulk-pin-btn').onclick = () => {
+            if (_historyHandlers.onBulkPin) _historyHandlers.onBulkPin(Array.from(selectedHistoryIds), true);
+            selectedHistoryIds.clear();
+            updateBulkBar();
+        };
+
+        document.getElementById('bulk-unpin-btn').onclick = () => {
+            if (_historyHandlers.onBulkPin) _historyHandlers.onBulkPin(Array.from(selectedHistoryIds), false);
+            selectedHistoryIds.clear();
+            updateBulkBar();
+        };
+
+        document.getElementById('bulk-delete-btn').onclick = () => {
+            confirmBulkDelete();
+        };
+    } else {
+        bar.classList.add('hidden');
+    }
+}
+
+function confirmDeleteHistory(file) {
+    const safeName = window.DOMPurify.sanitize(file.name);
+    showModal({
+        title: 'Delete History Item',
+        message: `Are you sure you want to delete "<b>${safeName}</b>"? This action cannot be undone.`,
+        headerColor: '#ef4444',
+        iconClass: 'ph-fill ph-trash',
+        primaryBtn: {
+            text: 'Delete',
+            className: 'btn btn-sm btn-primary',
+            onClick: () => {
+                if (_historyHandlers.onDelete) _historyHandlers.onDelete(file.id);
+            }
+        },
+        dismissBtn: { text: 'Cancel' }
+    });
+}
+
+function confirmBulkDelete() {
+    showModal({
+        title: 'Delete Multiple Items',
+        message: `Are you sure you want to delete <b>${selectedHistoryIds.size}</b> items? This action cannot be undone.`,
+        headerColor: '#ef4444',
+        iconClass: 'ph-fill ph-trash',
+        primaryBtn: {
+            text: 'Delete All',
+            className: 'btn btn-sm btn-primary',
+            onClick: () => {
+                if (_historyHandlers.onBulkDelete) _historyHandlers.onBulkDelete(Array.from(selectedHistoryIds));
+                selectedHistoryIds.clear();
+                updateBulkBar();
+            }
+        },
+        dismissBtn: { text: 'Cancel' }
+    });
+}
+
+function startHistoryRename(file, itemEl) {
+    const textSpan = itemEl.querySelector('.file-text');
+    const nameGroup = itemEl.querySelector('.file-name-group');
+    if (!textSpan || !nameGroup) return;
+
+    const originalName = file.name;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'history-rename-input';
+    input.value = originalName;
+    input.spellcheck = false;
+    input.onclick = (e) => e.stopPropagation();
+    input.onmousedown = (e) => e.stopPropagation();
+
+    itemEl.classList.add('is-editing');
+    nameGroup.replaceChild(input, textSpan);
+    input.focus();
+    input.select();
+
+    const finish = (save) => {
+        if (!itemEl.classList.contains('is-editing')) return;
+        const newName = input.value.trim();
+
+        if (save && newName && newName !== originalName) {
+            if (_historyHandlers.onRename) _historyHandlers.onRename(file.id, newName);
+        } else {
+            // Revert UI immediately if not saving or no change
+            itemEl.classList.remove('is-editing');
+            if (nameGroup.contains(input)) nameGroup.replaceChild(textSpan, input);
+        }
+    };
+
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') finish(true);
+        if (e.key === 'Escape') finish(false);
+    };
+
+    input.onblur = () => finish(false); // Follow memory: revert on blur
 }
 
 // --- Conversation Rendering ---
