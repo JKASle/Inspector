@@ -506,7 +506,9 @@ button.search-toggle.active {
 }
 
 .prompt-item.is-edited > i:first-child {
-    color: #bab08a;
+    padding-right: 11px;
+    border-right: 2px solid var(--text-faint);
+    border-radius: 3px;
 }
 
 .prompt-item-actions {
