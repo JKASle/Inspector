@@ -1,5 +1,5 @@
 import { initPreferences, prefs, setTheme } from './settings.js';
-import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory, updateFileNameInDB, findFileByName, getFileById } from './db.js';
+import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory, updateFileNameInDB, findFileByName, getFileById, getUniqueName } from './db.js';
 import { fetchDriveFile, parseDriveLink, cancelFetch, fetchProxyBlob } from './drive.js';
 import { parseConversation, generateMetadataHTML, getCleanJSON, extractMedia } from './parser.js';
 import * as UI from './ui.js';
@@ -27,21 +27,27 @@ document.addEventListener('DOMContentLoaded', () => {
         loadHistory();
         handleInitialLoad();
     });
+    UI.initAllUI();
     setupEventListeners();
     setupThemeLogic();
-    UI.setNavigationContext(state, renderChat);
-    UI.setupRenamingUI(renameCurrentFile, handleScrapeName);
+    UI.setupRenamingUI(handleRename, attemptScrapeName);
+    UI.setNavigationContext(state, {
+        onPromptClick: renderChat,
+        onRename: handleRename,
+        onScrapeName: attemptScrapeName
+    });
 });
 
 function handleInitialLoad() {
     const urlParams = new URLSearchParams(window.location.search);
     let fileId = urlParams.get('view') || urlParams.get('id') || urlParams.get('chat');
-    let localId = urlParams.get('localId');
+    const historyId = urlParams.get('h') || urlParams.get('localId');
 
-    if (localId) {
-        getFileById(parseInt(localId), (record) => {
-            if (record) loadFileFromRecord(record);
-            else UI.showError("Not Found", "Local file not found.");
+    if (historyId) {
+        getFileById(Number(historyId), (record) => {
+            if (record) {
+                loadFileFromRecord(record);
+            }
         });
         return;
     }
@@ -106,12 +112,12 @@ function handleText(text, name, driveId = null) {
             data: result.data,
             raw: text,
             driveId: driveId
-        }, (recordId) => {
-            state.currentFileRecordId = recordId;
+        }, (id, finalName) => {
+            state.currentFileRecordId = id;
+            state.currentFileName = finalName;
             loadHistory();
+            processAndRender();
         });
-        
-        processAndRender();
         UI.hideLoading();
     } catch (e) {
         console.error(e);
@@ -122,9 +128,9 @@ function handleText(text, name, driveId = null) {
 
 function loadFileFromRecord(record) {
     UI.showLoading();
-    state.currentFileRecordId = record.id;
     state.currentFileName = record.name;
     state.currentFileId = record.driveId || null;
+    state.currentFileRecordId = record.id;
     state.parsedData = record.data;
     state.rawContent = record.raw || JSON.stringify(record.data, null, 2);
     
@@ -133,6 +139,7 @@ function loadFileFromRecord(record) {
     state.currentPrompts = result.prompts;
     
     processAndRender();
+    loadHistory();
     UI.hideLoading();
 }
 
@@ -154,7 +161,7 @@ function loadFromDrive(id) {
 }
 
 function processAndRender() {
-    UI.updateFilename(state.currentFileName, state.currentFileId);
+    UI.updateRenamingUI(state.currentFileName, state.currentFileId);
     document.title = `${state.currentFileName} | Inspector`;
     
     // Metadata
@@ -220,8 +227,109 @@ function loadHistory() {
             onTogglePin: (file) => {
                 togglePinInDB(file, () => loadHistory());
             }
-        });
+        }, state.currentFileRecordId);
     });
+}
+
+async function attemptScrapeName() {
+    if (!state.currentFileId) return;
+    UI.showLoading();
+    const url = `https://aistudio.google.com/app/prompts/${state.currentFileId}`;
+    try {
+        const proxyUrl = `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}`;
+        const response = await fetch(proxyUrl);
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const h1 = doc.querySelector('.toolbar-container h1') || doc.querySelector('h1');
+        let scrapedName = h1 ? h1.textContent.trim() : null;
+
+        if (!scrapedName) {
+            const metaTitle = doc.querySelector('meta[property="og:title"]') || doc.querySelector('meta[name="twitter:title"]');
+            if (metaTitle) scrapedName = metaTitle.getAttribute('content');
+        }
+
+        if (!scrapedName && doc.title) {
+            scrapedName = doc.title.replace(' - Google Drive', '').replace(' - Google AI Studio', '').trim();
+        }
+
+        if (scrapedName) {
+            if (scrapedName !== state.currentFileName) {
+                // Populate the input for user review instead of direct save
+                const input = document.getElementById('filename-input');
+                const display = document.getElementById('filename-display');
+                if (input && display) {
+                    display.classList.add('hidden');
+                    input.classList.remove('hidden');
+                    input.value = scrapedName;
+                    input.focus();
+                    input.select();
+                    showToast('Name scraped. Press Enter to confirm.');
+                }
+            } else {
+                showToast('Name is already up to date');
+            }
+        } else {
+            showToast('Could not find name in page', 'error');
+        }
+    } catch (e) {
+        console.error("Scrape failed", e);
+        showToast("Failed to scrape name", "error");
+    } finally {
+        UI.hideLoading();
+    }
+}
+
+async function handleRename(newName, targetId = state.currentFileRecordId) {
+    if (!targetId) return Promise.resolve();
+
+    const existingFile = await findFileByName(newName);
+    if (existingFile && existingFile.id !== targetId) {
+        // Conflict
+        return new Promise(async (resolve) => {
+            let currentNameOfTarget = "";
+            if (targetId === state.currentFileRecordId) {
+                currentNameOfTarget = state.currentFileName;
+            } else {
+                const f = await getFileById(targetId);
+                currentNameOfTarget = f ? f.name : "Unknown";
+            }
+
+            UI.showConflictResolver(newName, existingFile, currentNameOfTarget,
+                async () => {
+                    // Rename Anyways
+                    const uniqueName = await getUniqueName(newName);
+                    await finalizeRename(targetId, uniqueName);
+                    resolve();
+                },
+                async (otherNewName, currentNewName) => {
+                    // Resolve Both
+                    if (otherNewName === currentNewName) {
+                        // Scenario: both set to same name
+                        await handleRename(otherNewName, existingFile.id);
+                        const uniqueForCurrent = await getUniqueName(currentNewName);
+                        await handleRename(uniqueForCurrent, targetId);
+                    } else {
+                        await handleRename(otherNewName, existingFile.id);
+                        await handleRename(currentNewName, targetId);
+                    }
+                    resolve();
+                },
+                () => resolve() // On Cancel
+            );
+        });
+    } else {
+        return finalizeRename(targetId, newName);
+    }
+}
+
+async function finalizeRename(id, newName) {
+    await updateFileNameInDB(id, newName);
+    if (id === state.currentFileRecordId) {
+        state.currentFileName = newName;
+        processAndRender();
+    }
+    loadHistory();
 }
 
 function performSearch(term) {
@@ -513,108 +621,4 @@ function downloadString(content, filename, contentType) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-}
-
-function renameCurrentFile(newName) {
-    newName = newName.trim();
-    if (!newName || newName === state.currentFileName) return;
-
-    findFileByName(newName, (conflictingFile) => {
-        if (conflictingFile && conflictingFile.id !== state.currentFileRecordId) {
-            UI.showConflictModal({ currentName: newName, conflictingFile }, {
-                onRenameAnyways: () => {
-                    // Check if the original name is now available (resolved in another tab)
-                    findFileByName(newName, (conflict) => {
-                        if (!conflict || conflict.id === state.currentFileRecordId) {
-                            performRename(newName);
-                            return;
-                        }
-
-                        let increment = 2;
-                        const findNext = (base) => {
-                            const candidate = `${base} (${increment})`;
-                            findFileByName(candidate, (innerConflict) => {
-                                if (innerConflict) {
-                                    increment++;
-                                    findNext(base);
-                                } else {
-                                    performRename(candidate);
-                                }
-                            });
-                        };
-                        findNext(newName);
-                    });
-                },
-                onOpenConflicting: (file) => {
-                    const url = new URL(window.location.href);
-                    url.searchParams.delete('view');
-                    url.searchParams.delete('id');
-                    url.searchParams.delete('chat');
-                    url.searchParams.set('localId', file.id);
-                    window.open(url.toString(), '_blank');
-                },
-                onChangeOtherName: (file, newOtherName, newCurrentName) => {
-                    updateFileNameInDB(file.id, newOtherName, () => {
-                        if (newCurrentName) {
-                            performRename(newCurrentName);
-                        } else {
-                            loadHistory();
-                        }
-                    });
-                }
-            });
-        } else {
-            performRename(newName);
-        }
-    });
-}
-
-function performRename(newName) {
-    state.currentFileName = newName;
-    updateFileNameInDB(state.currentFileRecordId, newName, () => {
-        loadHistory();
-        UI.updateFilename(newName, state.currentFileId);
-        document.title = `${newName} | Inspector`;
-        showToast("Renamed successfully");
-    });
-}
-
-async function handleScrapeName() {
-    if (!state.currentFileId) return;
-    showToast("Attempting to fetch name...");
-
-    const originalUrl = `https://drive.google.com/file/d/${state.currentFileId}/edit`;
-    const proxyUrl = `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(originalUrl)}`;
-
-    try {
-        const response = await fetch(proxyUrl);
-        const html = await response.text();
-        const doc = new DOMParser().parseFromString(html, 'text/html');
-
-        let name = (doc.querySelector('head > meta[property="og:title"]')?.getAttribute('content')) ||
-                   (doc.querySelector('body > meta[itemprop="name"]')?.getAttribute('content')) ||
-                   doc.title;
-
-        if (name && name.endsWith(" - Google Drive")) {
-            name = name.slice(0, -" - Google Drive".length);
-        }
-
-        if (name && name !== "Google Drive: Term of Service Verification") {
-            const input = document.getElementById('filename-input');
-            const display = document.getElementById('filename-display');
-
-            display.classList.add('hidden');
-            input.classList.remove('hidden');
-            input.value = name;
-            input.focus();
-            input.select();
-
-            showToast("Name found! Press Enter to confirm.");
-        } else {
-            showToast("Could not find a name on the page. Private file?");
-        }
-    } catch (e) {
-        console.error("Scraping failed", e);
-        showToast("Failed to scrape name. Network error?");
-    }
 }

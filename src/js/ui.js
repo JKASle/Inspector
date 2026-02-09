@@ -17,6 +17,11 @@ function saveAccess(id, status) {
 }
 
 let currentViewingText = ""; // State for manual language updates
+let currentFileRecordId = null;
+
+export function setCurrentFileRecordId(id) {
+    currentFileRecordId = id;
+}
 
 function getExtensionFromMime(mime) {
     if (!mime || mime === 'application/octet-stream' || mime === 'text/plain') {
@@ -81,8 +86,6 @@ const els = {
     sidebar: document.getElementById('sidebar'),
     sidebarOverlay: document.getElementById('sidebar-overlay'),
     filenameDisplay: document.getElementById('filename-display'),
-    filenameInput: document.getElementById('filename-input'),
-    scrapeNameBtn: document.getElementById('scrape-name-btn'),
     
     // History
     recentList: document.getElementById('recent-files-list'),
@@ -102,12 +105,11 @@ const els = {
     mediaModal: document.getElementById('media-modal'),
     mediaPlayerModal: document.getElementById('media-player-modal'),
     mediaPlayerContainer: document.getElementById('media-player-container'),
-    errorModal: document.getElementById('error-modal'),
-    confirmModal: document.getElementById('confirm-modal')
+    genericModal: document.getElementById('generic-modal')
 };
 
 // --- Initialization & Settings Controls ---
-document.addEventListener('DOMContentLoaded', () => {
+export function initAllUI() {
     try {
         initSettingsUI();
         initHistoryUI();
@@ -117,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
         console.error("Critical Initialization Error:", e);
     }
-});
+}
 
 function initSettingsUI() {
     // Width Slider
@@ -134,32 +136,27 @@ function initSettingsUI() {
     // --- Toggles ---
     
     // Helper for simple boolean toggles
-    const setupSimpleToggle = (id, prefKey, onChange) => {
+    const setupSimpleToggle = (id, prefKey, storageKey, onChange) => {
         const el = document.getElementById(id);
         if (!el) return; // Prevent crash if element is missing
         
+        const sKey = storageKey || prefKey;
         el.checked = prefs[prefKey];
         el.addEventListener('change', (e) => {
             prefs[prefKey] = e.target.checked;
-            localStorage.setItem(prefKey, JSON.stringify(e.target.checked));
+            localStorage.setItem(sKey, JSON.stringify(e.target.checked));
             if(onChange) onChange(e.target.checked);
         });
     };
 
     // Auto Restore
-    setupSimpleToggle('autoRestoreToggle', 'openLastFileOnStartup');
-    // Note: The HTML only has 'autoRestoreToggle', but original code bound 'autoRestoreContent' to the same or a missing one.
-    // If 'autoRestoreContent' ID doesn't exist, we skip binding to prevent crash.
-    setupSimpleToggle('autoRestoreContent', 'autoRestoreContent');
+    setupSimpleToggle('autoRestoreToggle', 'openLastFileOnStartup', 'autoRestore');
+    setupSimpleToggle('autoRestoreContent', 'autoRestoreContent', 'autoRestoreContent');
 
-    // Thinking Mode (Inverted Logic)
+    // Thinking Mode Initial State (Event handled in app.js for re-rendering)
     const thinkingToggle = document.getElementById('thinkingModeToggle');
     if (thinkingToggle) {
         thinkingToggle.checked = !prefs.collapseThoughts; 
-        thinkingToggle.addEventListener('change', (e) => {
-            prefs.collapseThoughts = !e.target.checked;
-            localStorage.setItem('collapseThoughts', JSON.stringify(prefs.collapseThoughts));
-        });
     }
 
     // Metadata Toggle (Inverted Logic)
@@ -178,7 +175,7 @@ function initSettingsUI() {
     }
 
     // Code State Persistence
-    setupSimpleToggle('codePersistenceToggle', 'preserveCodeState', (checked) => {
+    setupSimpleToggle('codePersistenceToggle', 'preserveCodeState', 'preserveCodeState', (checked) => {
         if (!checked) {
             const currentFile = els.filenameDisplay.textContent;
             if (currentFile && currentFile !== 'No file loaded') {
@@ -187,11 +184,11 @@ function initSettingsUI() {
         }
     });
 
-    setupSimpleToggle('scrollableCodeToggle', 'isScrollableCode', (checked) => {
+    setupSimpleToggle('scrollableCodeToggle', 'isScrollableCode', 'scrollableCode', (checked) => {
         document.body.classList.toggle('scrollable-codeblocks', checked);
     });
 
-    setupSimpleToggle('wrapCodeToggle', 'isWrapCode', (checked) => {
+    setupSimpleToggle('wrapCodeToggle', 'isWrapCode', 'wrapCode', (checked) => {
         document.body.classList.toggle('wrap-codeblocks', checked);
     });
 
@@ -305,7 +302,10 @@ function navigateMessages(direction) {
     } else {
         if (nextIndex < 0) {
             if (_appState.focusIndex > 0) {
-                _renderConversation(_appState.focusIndex - 1);
+                const prevIdx = _appState.focusIndex - 1;
+                if (typeof _renderConversation === 'function') _renderConversation(prevIdx);
+                else if (_renderConversation && _renderConversation.onPromptClick) _renderConversation.onPromptClick(prevIdx);
+
                 setTimeout(() => els.scrollContainer.scrollTo({
                     top: els.scrollContainer.scrollHeight,
                     behavior: 'auto'
@@ -313,7 +313,9 @@ function navigateMessages(direction) {
             }
         } else if (nextIndex >= messages.length) {
             if (_appState.focusIndex < _appState.currentPrompts.length - 1) {
-                _renderConversation(_appState.focusIndex + 1);
+                const nextIdx = _appState.focusIndex + 1;
+                if (typeof _renderConversation === 'function') _renderConversation(nextIdx);
+                else if (_renderConversation && _renderConversation.onPromptClick) _renderConversation.onPromptClick(nextIdx);
             }
         } else {
             messages[nextIndex].scrollIntoView({
@@ -541,23 +543,10 @@ function initModals() {
         });
     }
 
-    // Error Modal
-    const closeErrorBtn = document.getElementById('close-error-btn');
-    if(closeErrorBtn) closeErrorBtn.addEventListener('click', () => els.errorModal.classList.add('hidden'));
-    
-    if(els.errorModal) {
-        els.errorModal.addEventListener('click', (e) => {
-            if(e.target === els.errorModal) els.errorModal.classList.add('hidden');
-        });
-    }
-
-    // Confirm Modal
-    const cancelConfirmBtn = document.getElementById('confirm-cancel-btn');
-    if(cancelConfirmBtn) cancelConfirmBtn.addEventListener('click', () => els.confirmModal.classList.add('hidden'));
-    
-    if(els.confirmModal) {
-        els.confirmModal.addEventListener('click', (e) => {
-            if(e.target === els.confirmModal) els.confirmModal.classList.add('hidden');
+    // Generic Modal
+    if(els.genericModal) {
+        els.genericModal.addEventListener('click', (e) => {
+            if(e.target === els.genericModal) els.genericModal.classList.add('hidden');
         });
     }
     
@@ -622,6 +611,127 @@ function initModals() {
 
 // --- Main UI Exported Functions ---
 
+/**
+ * Generic Modal System
+ * @param {Object} config
+ * @param {string} config.title - Header title
+ * @param {string} config.message - Body text or HTML
+ * @param {string} config.headerColor - CSS background color for header
+ * @param {string} config.iconClass - Phosphor icon class for header
+ * @param {Object} config.primaryBtn - { text, onClick, className, href, target }
+ * @param {Object} config.secondaryBtn - { text, onClick, className }
+ * @param {Object} config.dismissBtn - { text, onClick }
+ * @param {Element} config.extraContent - Optional DOM element to inject into body
+ */
+export function showModal(config) {
+    const modal = els.genericModal;
+    const header = modal.querySelector('.error-header');
+    const title = header.querySelector('span');
+    const icon = header.querySelector('i');
+    const bodyText = document.getElementById('modal-message-text');
+    const extraContainer = document.getElementById('modal-extra-content');
+    const footer = document.getElementById('modal-footer');
+
+    // Reset
+    extraContainer.innerHTML = '';
+    extraContainer.classList.add('hidden');
+    footer.innerHTML = '';
+
+    // Set Header
+    title.textContent = config.title || 'Notification';
+    header.style.backgroundColor = config.headerColor || '#ef4444';
+    if (config.iconClass) icon.className = config.iconClass;
+    else icon.className = 'ph-fill ph-warning-circle';
+
+    // Set Body
+    bodyText.innerHTML = config.message || '';
+    if (config.extraContent) {
+        extraContainer.appendChild(config.extraContent);
+        extraContainer.classList.remove('hidden');
+    }
+
+    // Footer Buttons Logic
+    // Rule:
+    // 1 Button: Secondary Left (Dismiss)
+    // 2 Buttons: Secondary Left (Dismiss), Primary Right
+    // 3 Buttons: Secondary Left (Dismiss), Primary Centre, Secondary Right
+
+    // Left: Dismiss (Always there)
+    const dismissBtn = document.createElement('button');
+    dismissBtn.className = 'btn btn-sm btn-secondary';
+    dismissBtn.textContent = (config.dismissBtn && config.dismissBtn.text) || 'Dismiss';
+    dismissBtn.onclick = () => {
+        modal.classList.add('hidden');
+        if (config.dismissBtn && config.dismissBtn.onClick) config.dismissBtn.onClick();
+    };
+    footer.appendChild(dismissBtn);
+
+    const primary = config.primaryBtn;
+    const secondary = config.secondaryBtn;
+
+    if (primary && secondary) {
+        // 3 Buttons: [Dismiss Left] [Primary Center] [Secondary Right]
+        const centerBtn = (primary.href) ? document.createElement('a') : document.createElement('button');
+        centerBtn.className = primary.className || 'btn btn-sm btn-primary';
+        centerBtn.classList.add('btn-centered');
+        centerBtn.innerHTML = primary.text;
+        if (primary.href) {
+            centerBtn.href = primary.href;
+            centerBtn.target = primary.target || '_blank';
+        }
+        centerBtn.onclick = (e) => {
+            let shouldClose = !primary.href;
+            if (primary.onClick) {
+                const result = primary.onClick(e);
+                if (result === false) shouldClose = false;
+            }
+            if (shouldClose) modal.classList.add('hidden');
+        };
+
+        const rightBtn = (secondary.href) ? document.createElement('a') : document.createElement('button');
+        rightBtn.className = secondary.className || 'btn btn-sm btn-secondary';
+        rightBtn.innerHTML = secondary.text;
+        if (secondary.href) {
+            rightBtn.href = secondary.href;
+            rightBtn.target = secondary.target || '_blank';
+        }
+        rightBtn.onclick = (e) => {
+            let shouldClose = !secondary.href;
+            if (secondary.onClick) {
+                const result = secondary.onClick(e);
+                if (result === false) shouldClose = false;
+            }
+            if (shouldClose) modal.classList.add('hidden');
+        };
+
+        footer.appendChild(centerBtn);
+        footer.appendChild(rightBtn);
+    } else if (primary || secondary) {
+        // 2 Buttons: [Dismiss Left] [Primary or Secondary Right]
+        const btnConfig = primary || secondary;
+        // User says 2 buttons: Secondary Left, Primary Right.
+        // So if we only have one action button, it should be Primary.
+        const btn = (btnConfig.href) ? document.createElement('a') : document.createElement('button');
+        btn.className = btnConfig.className || 'btn btn-sm btn-primary';
+        btn.innerHTML = btnConfig.text;
+        if (btnConfig.href) {
+            btn.href = btnConfig.href;
+            btn.target = btnConfig.target || '_blank';
+        }
+        btn.onclick = (e) => {
+            let shouldClose = !btnConfig.href;
+            if (btnConfig.onClick) {
+                const result = btnConfig.onClick(e);
+                if (result === false) shouldClose = false;
+            }
+            if (shouldClose) modal.classList.add('hidden');
+        };
+        footer.appendChild(btn);
+    }
+
+    modal.classList.remove('hidden');
+}
+
 export function showLoading() { els.loading.classList.remove('hidden'); }
 export function hideLoading() { els.loading.classList.add('hidden'); }
 
@@ -636,34 +746,37 @@ export function toggleSidebar() {
     }
 }
 
-export function updateFilename(name, driveId = null) {
-    const isNoFile = name === "No file loaded" || !name;
-    els.filenameDisplay.textContent = truncate(name || "No file loaded", 64);
-    els.filenameDisplay.title = name || "No file loaded";
-    els.filenameInput.value = name || "";
+export function updateRenamingUI(name, driveId = null) {
+    const nameToDisplay = name || 'No file loaded';
+    els.filenameDisplay.textContent = truncate(nameToDisplay, 64);
+    els.filenameDisplay.title = nameToDisplay;
 
+    const wrapper = document.querySelector('.filename-wrapper');
+    const scrapeBtn = document.getElementById('scrape-name-btn');
     const container = document.getElementById('file-info-container');
-    const filenameWrapper = container.querySelector('.filename-wrapper');
-    if (filenameWrapper) {
-        filenameWrapper.classList.toggle('is-empty', isNoFile);
-    }
     const popover = document.getElementById('file-info-popover');
     const openBtn = document.getElementById('open-in-ai-studio-btn');
     const copyBtn = document.getElementById('copy-file-id-btn');
 
-    if (driveId) {
+    if (nameToDisplay === 'No file loaded') {
+        wrapper.classList.add('is-empty');
+    } else {
+        wrapper.classList.remove('is-empty');
+    }
+
+    scrapeBtn.classList.toggle('hidden', !driveId);
+
+    if (driveId && typeof driveId === 'string') {
         container.classList.add('has-id');
         popover.classList.remove('hidden');
-        els.scrapeNameBtn.classList.remove('hidden');
         
-        const fullLink = `https://aistudio.google.com/prompts/${driveId}`;
-        openBtn.href = fullLink;
-        openBtn.title = fullLink;
-        copyBtn.title = driveId;
+        openBtn.href = `https://aistudio.google.com/app/prompts/${driveId}`;
+        openBtn.title = `https://aistudio.google.com/app/prompts/${driveId}`;
         
         // Remove old listener to prevent duplicates
         const newCopyBtn = copyBtn.cloneNode(true);
         copyBtn.parentNode.replaceChild(newCopyBtn, copyBtn);
+        newCopyBtn.title = driveId;
         
         newCopyBtn.addEventListener('click', () => {
             navigator.clipboard.writeText(driveId).then(() => showToast("ID copied to clipboard"));
@@ -671,112 +784,120 @@ export function updateFilename(name, driveId = null) {
     } else {
         container.classList.remove('has-id');
         popover.classList.add('hidden');
-        els.scrapeNameBtn.classList.add('hidden');
     }
 }
 
 export function setupRenamingUI(onRename, onScrape) {
-    console.log("Setting up renaming UI", els.filenameDisplay);
+    const filenameInput = document.getElementById('filename-input');
+    const scrapeBtn = document.getElementById('scrape-name-btn');
+
     els.filenameDisplay.addEventListener('click', () => {
         if (els.filenameDisplay.textContent === 'No file loaded') return;
-        console.log("Filename display clicked");
+        filenameInput.value = els.filenameDisplay.title; // Use full title for editing
         els.filenameDisplay.classList.add('hidden');
-        els.filenameInput.classList.remove('hidden');
-        els.filenameInput.focus();
-        els.filenameInput.select();
+        filenameInput.classList.remove('hidden');
+        filenameInput.focus();
     });
 
-    els.filenameInput.addEventListener('keydown', (e) => {
+    filenameInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
-            onRename(els.filenameInput.value);
-            exitRename();
+            const newName = filenameInput.value.trim();
+            if (newName && newName !== els.filenameDisplay.title) {
+                onRename(newName);
+            }
+            revert();
         } else if (e.key === 'Escape') {
-            exitRename();
+            revert();
         }
     });
 
-    els.filenameInput.addEventListener('blur', () => {
-        // Revert on blur as requested
-        exitRename();
-    });
+    filenameInput.addEventListener('blur', revert);
 
-    function exitRename() {
+    function revert() {
         els.filenameDisplay.classList.remove('hidden');
-        els.filenameInput.classList.add('hidden');
-        els.filenameInput.value = els.filenameDisplay.title;
+        filenameInput.classList.add('hidden');
     }
 
-    els.scrapeNameBtn.addEventListener('click', onScrape);
+    scrapeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onScrape();
+    });
 }
 
-export function showConflictModal(conflictInfo, handlers) {
-    const { currentName, conflictingFile } = conflictInfo;
-    const { onRenameAnyways, onOpenConflicting, onChangeOtherName } = handlers;
+export function showConflictResolver(targetName, existingFile, currentFileName, onRenameAnyways, onRenameBoth, onCancel) {
+    const container = document.createElement('div');
+    container.className = 'conflict-resolver-container';
 
-    showError("Name Conflict", `The name is already taken.`, false);
+    container.innerHTML = `
+        <div id="conflict-initial-actions" class="flex-column gap-10 mt-10">
+            <button id="resolve-conflicts-trigger" class="btn btn-primary w-full">Resolve Conflicts</button>
+            <button id="rename-anyways-btn" class="btn btn-secondary w-full">Rename Anyways</button>
+        </div>
+        <div id="conflict-resolver-expandable" class="hidden mt-15">
+            <div class="conflict-input-group">
+                <label class="input-label" for="other-filename-input">New name for the other file:</label>
+                <input type="text" id="other-filename-input" class="filename-input mb-10 w-full" spellcheck="false">
 
-    const conflictSection = document.getElementById('conflict-resolution-section');
-    conflictSection.classList.remove('hidden');
+                <label class="input-label" for="current-filename-input">New name for this current file:</label>
+                <input type="text" id="current-filename-input" class="filename-input mb-15 w-full" spellcheck="false">
+            </div>
+            <div class="conflict-resolution-actions flex-column gap-10">
+                <button id="rename-both-btn" class="btn btn-primary w-full">Rename Both</button>
+                <button id="open-conflicting-btn" class="btn btn-secondary w-full">
+                    <i class="ph ph-arrow-square-out"></i> Open conflicting file
+                </button>
+            </div>
+        </div>
+    `;
 
-    const initialActions = document.getElementById('conflict-initial-actions');
-    const expandable = document.getElementById('conflict-resolver-expandable');
+    const resolveTrigger = container.querySelector('#resolve-conflicts-trigger');
+    const renameAnywaysBtn = container.querySelector('#rename-anyways-btn');
+    const expandable = container.querySelector('#conflict-resolver-expandable');
+    const initialActions = container.querySelector('#conflict-initial-actions');
 
-    initialActions.classList.remove('hidden');
-    expandable.classList.add('hidden');
+    const otherInput = container.querySelector('#other-filename-input');
+    const currentInput = container.querySelector('#current-filename-input');
+    const renameBothBtn = container.querySelector('#rename-both-btn');
+    const openConflictingBtn = container.querySelector('#open-conflicting-btn');
 
-    const anywaysBtn = document.getElementById('rename-anyways-btn');
-    const resolveBtn = document.getElementById('resolve-conflicts-btn');
-    const openBtn = document.getElementById('open-conflicting-btn');
-    const renameBothBtn = document.getElementById('rename-both-btn');
-    const otherInput = document.getElementById('other-filename-input');
-    const currentInput = document.getElementById('current-filename-input');
-
-    anywaysBtn.onclick = () => {
-        conflictSection.classList.add('hidden');
-        els.errorModal.classList.add('hidden');
-        onRenameAnyways();
-    };
-
-    resolveBtn.onclick = () => {
+    resolveTrigger.onclick = () => {
         initialActions.classList.add('hidden');
         expandable.classList.remove('hidden');
 
-        otherInput.value = "";
-        otherInput.placeholder = conflictingFile.name;
+        otherInput.placeholder = existingFile.name;
+        otherInput.value = '';
+        currentInput.placeholder = currentFileName;
+        currentInput.value = targetName;
 
-        currentInput.value = currentName;
-        currentInput.placeholder = els.filenameDisplay.title;
-
-        currentInput.focus();
-        currentInput.select();
+        setTimeout(() => currentInput.focus(), 50);
     };
 
-    openBtn.onclick = () => {
-        onOpenConflicting(conflictingFile);
+    renameAnywaysBtn.onclick = () => {
+        document.getElementById('generic-modal').classList.add('hidden');
+        onRenameAnyways();
     };
 
     renameBothBtn.onclick = () => {
-        const newOtherName = otherInput.value.trim() || conflictingFile.name;
-        const newCurrentName = currentInput.value.trim();
-
-        conflictSection.classList.add('hidden');
-        els.errorModal.classList.add('hidden');
-
-        if (newOtherName === conflictingFile.name && newCurrentName === currentName) {
-            onRenameAnyways();
-        } else {
-            onChangeOtherName(conflictingFile, newOtherName, newCurrentName);
+        const otherNewName = otherInput.value.trim() || existingFile.name;
+        const currentNewName = currentInput.value.trim() || currentFileName;
+        if (otherNewName && currentNewName) {
+            document.getElementById('generic-modal').classList.add('hidden');
+            onRenameBoth(otherNewName, currentNewName);
         }
     };
 
-    // Override the dismiss button to also hide conflict section
-    const closeBtn = document.getElementById('close-error-btn');
-    const oldOnClick = closeBtn.onclick;
-    closeBtn.onclick = () => {
-        conflictSection.classList.add('hidden');
-        els.errorModal.classList.add('hidden');
-        if(oldOnClick) oldOnClick();
+    openConflictingBtn.onclick = () => {
+        window.open(`${window.location.origin}${window.location.pathname}?h=${existingFile.id}`, '_blank');
     };
+
+    showModal({
+        title: 'File Name Conflict',
+        message: `The name is already taken.`,
+        headerColor: '#ef4444',
+        iconClass: 'ph-fill ph-warning-circle',
+        extraContent: container,
+        dismissBtn: { text: 'Cancel', onClick: onCancel }
+    });
 }
 
 export function renderMetadata(metaHtml) {
@@ -857,15 +978,20 @@ export function setActiveSidebarItem(index) {
     if(target) target.classList.add('active');
 }
 
-export function renderHistoryLists(recentFiles, pinnedFiles, handlers) {
+export function renderHistoryLists(recentFiles, pinnedFiles, handlers, activeId = null) {
     const { onLoad, onTogglePin } = handlers;
+    if (activeId) currentFileRecordId = activeId;
     
     els.historySection.classList.toggle('hidden', recentFiles.length === 0 && pinnedFiles.length === 0);
     
     const createItem = (file) => {
         const div = document.createElement('div');
         div.className = 'recent-file-item';
-        if(file.name === els.filenameDisplay.title) div.classList.add('active');
+        if (currentFileRecordId && file.id === currentFileRecordId) {
+            div.classList.add('active');
+        } else if (!currentFileRecordId && file.name === els.filenameDisplay.title) {
+            div.classList.add('active');
+        }
         
         div.onclick = () => onLoad(file);
 
@@ -933,7 +1059,7 @@ export function renderConversation(parsedData, promptIndex, promptsList) {
 }
 
 export function renderFullConversation(parsedData, promptsList) {
-    els.chatStream.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-faint); text-transform:uppercase; font-size:11px; font-weight:600; letter-spacing:0.05em;">Full Conversation History</div>';
+    els.chatStream.innerHTML = '<div class="full-history-header">Full Conversation History</div>';
     els.chatStream.setAttribute('data-view', 'full');
 
     let currentTurn = [];
@@ -1006,8 +1132,8 @@ function createMessageElement(chunks, role, id = null) {
     const isUser = role === 'user';
     const iconHtml = isUser ? 'You' : (isThought ? '<i class="ph-fill ph-brain"></i> Thinking' : '<i class="ph-fill ph-sparkle"></i> Gemini');
     const totalTokens = chunks.reduce((acc, c) => acc + (c.tokenCount || 0), 0);
-    const tokens = totalTokens > 0 ? `<span style="opacity:0.5; font-weight:400; margin-left:8px;">${totalTokens} tokens</span>` : '';
-    const expandIcon = isThought ? `<span class="thought-icon-rotate" style="margin-left:auto;"><i class="ph ph-caret-${prefs.collapseThoughts ? 'down' : 'up'}"></i></span>` : '';
+    const tokens = totalTokens > 0 ? `<span class="token-count">${totalTokens} tokens</span>` : '';
+    const expandIcon = isThought ? `<span class="thought-icon-rotate thought-expand-icon"><i class="ph ph-caret-${prefs.collapseThoughts ? 'down' : 'up'}"></i></span>` : '';
 
     const header = document.createElement('div');
     header.className = 'message-header';
@@ -1043,8 +1169,8 @@ function createMessageElement(chunks, role, id = null) {
             };
         } else {
             // Hide text buttons if no text
-            copyMd.style.display = 'none';
-            copyText.style.display = 'none';
+            copyMd.classList.add('hidden');
+            copyText.classList.add('hidden');
         }
 
         if (hasMedia && dlMedia) {
@@ -1097,8 +1223,7 @@ function createMessageElement(chunks, role, id = null) {
         }
         else if (chunk.inlineFile) {
             contentContainer = document.createElement('div');
-            contentContainer.className = 'message-bubble inline-file-bubble';
-            contentContainer.style.alignSelf = 'flex-start';
+            contentContainer.className = 'message-bubble inline-file-bubble align-start';
 
             const mimeType = chunk.inlineFile.mimeType || '';
             const dataUrl = `data:${mimeType};base64,${chunk.inlineFile.data}`;
@@ -1106,21 +1231,19 @@ function createMessageElement(chunks, role, id = null) {
             if (mimeType.startsWith('image/')) {
                 const img = document.createElement('img');
                 img.src = dataUrl;
-                img.style.maxWidth = '100%';
-                img.style.borderRadius = 'var(--radius-sm)';
+                img.className = 'media-fluid';
                 contentContainer.appendChild(img);
             } else if (mimeType.startsWith('video/')) {
                 const video = document.createElement('video');
                 video.src = dataUrl;
                 video.controls = true;
-                video.style.maxWidth = '100%';
-                video.style.borderRadius = 'var(--radius-sm)';
+                video.className = 'media-fluid';
                 contentContainer.appendChild(video);
             } else if (mimeType.startsWith('audio/')) {
                 const audio = document.createElement('audio');
                 audio.src = dataUrl;
                 audio.controls = true;
-                audio.style.width = '100%';
+                audio.className = 'media-full-width';
                 contentContainer.appendChild(audio);
             } else {
                 // Text/Code handling
@@ -1147,7 +1270,7 @@ function createMessageElement(chunks, role, id = null) {
             }
 
             if (mimeType.startsWith('image/')) {
-                contentContainer.style.cursor = 'zoom-in';
+                contentContainer.classList.add('cursor-zoom');
                 contentContainer.onclick = () => viewInlineFile(chunk.inlineFile.data, mimeType);
             }
         }
@@ -1406,12 +1529,12 @@ function showMediaPlayer(url, contentType) {
     if (contentType.startsWith('audio/')) {
         const audioContainer = document.createElement('div');
         audioContainer.className = 'audio-player-container';
-        audioContainer.innerHTML = `<i class="ph-fill ph-speaker-high" style="font-size: 64px; color: var(--text-muted); margin-bottom: 20px;"></i>`;
+        audioContainer.innerHTML = `<i class="ph-fill ph-speaker-high audio-placeholder-icon"></i>`;
         
         mediaElement = document.createElement('audio');
         mediaElement.controls = true;
         mediaElement.autoplay = true;
-        mediaElement.style.width = '100%';
+        mediaElement.className = 'media-full-width';
         
         audioContainer.appendChild(mediaElement);
         container.appendChild(audioContainer);
@@ -1420,8 +1543,7 @@ function showMediaPlayer(url, contentType) {
         mediaElement = document.createElement('video');
         mediaElement.controls = true;
         mediaElement.autoplay = true;
-        mediaElement.style.maxWidth = '100%';
-        mediaElement.style.maxHeight = '100%';
+        mediaElement.className = 'media-fluid';
         container.appendChild(mediaElement);
         document.getElementById('media-player-filename').textContent = "Video Player";
     }
@@ -1558,6 +1680,9 @@ export function renderMediaGallery(mediaItems, onDownload) {
         downloadBtn.disabled = selectedIndices.size === 0;
         if(selectedIndices.size === 0) downloadBtn.classList.add('btn-secondary'); 
         else downloadBtn.classList.remove('btn-secondary');
+
+        const allSelected = selectedIndices.size === mediaItems.length && mediaItems.length > 0;
+        selectAllBtn.textContent = allSelected ? "Unselect All" : "Select All";
     }
     
     selectAllBtn.onclick = () => {
@@ -1643,7 +1768,7 @@ function postProcessCodeBlocks() {
                 </button>
                 <span class="lang-tag">${lang}</span>
             </div>
-            <div style="display:flex; align-items:center;">
+            <div class="code-header-actions">
                 ${expandBtnHtml}
                 <button class="copy-btn"><i class="ph ph-copy"></i> Copy</button>
             </div>
@@ -1689,57 +1814,52 @@ function postProcessCodeBlocks() {
 // --- Helpers ---
 
 export function showError(title, message, showGif, retryCallback, fileId) {
-    els.errorModal.querySelector('.error-header span').textContent = title;
-    document.getElementById('error-message-text').textContent = message;
-    document.getElementById('error-gif-container').classList.toggle('hidden', !showGif);
-    
-    const retryBtn = document.getElementById('retry-error-btn');
-    const driveBtn = document.getElementById('open-drive-error-btn');
-    
-    const newRetry = retryBtn.cloneNode(true);
-    retryBtn.parentNode.replaceChild(newRetry, retryBtn);
-    
-    if (retryCallback) {
-        newRetry.classList.remove('hidden');
-        newRetry.addEventListener('click', () => {
-            els.errorModal.classList.add('hidden');
-            retryCallback();
-        });
-    } else {
-        newRetry.classList.add('hidden');
+    let gifContent = null;
+    if (showGif) {
+        gifContent = document.createElement('div');
+        gifContent.id = 'error-gif-container';
+        gifContent.innerHTML = `
+            <img src="./assets/share-instruction.gif" alt="Share Settings: Anyone with link">
+            <p>Ensure sharing is set to "Anyone with the link".</p>
+        `;
     }
 
-    if (fileId) {
-        driveBtn.href = `https://drive.google.com/file/d/${fileId}/view?usp=sharing`;
-        driveBtn.classList.remove('hidden');
-    } else {
-        driveBtn.classList.add('hidden');
+    const config = {
+        title: title || 'System Notification',
+        message: message,
+        headerColor: '#ef4444',
+        iconClass: 'ph-fill ph-warning-circle',
+        extraContent: gifContent
+    };
+
+    if (retryCallback && fileId) {
+        config.primaryBtn = { text: 'Retry', onClick: retryCallback };
+        config.secondaryBtn = {
+            text: 'Open <i class="ph ph-arrow-square-out"></i>',
+            href: `https://drive.google.com/file/d/${fileId}/view?usp=sharing`,
+            className: 'btn btn-secondary btn-sm'
+        };
+    } else if (retryCallback) {
+        config.primaryBtn = { text: 'Retry', onClick: retryCallback };
+    } else if (fileId) {
+        config.primaryBtn = {
+            text: 'Open <i class="ph ph-arrow-square-out"></i>',
+            href: `https://drive.google.com/file/d/${fileId}/view?usp=sharing`
+        };
     }
 
-    els.errorModal.classList.remove('hidden');
+    showModal(config);
 }
 
 export function showConfirmModal(htmlMessage, onOk, onCancel) {
-    document.getElementById('confirm-message-text').innerHTML = htmlMessage;
-    
-    const okBtn = document.getElementById('confirm-ok-btn');
-    const cancelBtn = document.getElementById('confirm-cancel-btn');
-    const newOk = okBtn.cloneNode(true);
-    const newCancel = cancelBtn.cloneNode(true);
-    okBtn.parentNode.replaceChild(newOk, okBtn);
-    cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
-    
-    newOk.addEventListener('click', () => {
-        els.confirmModal.classList.add('hidden');
-        if(onOk) onOk();
+    showModal({
+        title: 'Confirm Action',
+        message: htmlMessage,
+        headerColor: 'var(--accent-surface)',
+        iconClass: 'ph-fill ph-question',
+        dismissBtn: { text: 'Cancel', onClick: onCancel },
+        primaryBtn: { text: 'Load File', onClick: onOk }
     });
-    
-    newCancel.addEventListener('click', () => {
-        els.confirmModal.classList.add('hidden');
-        if(onCancel) onCancel();
-    });
-
-    els.confirmModal.classList.remove('hidden');
 }
 
 function getIconClassForExtension(ext, mimeType = '') {
