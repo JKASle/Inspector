@@ -1,5 +1,5 @@
 import { initPreferences, prefs, setTheme } from './settings.js';
-import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory, updateFileNameInDB, findFileByName, getFileById, getUniqueName } from './db.js';
+import { initDB, saveFileToHistory, loadLastFileFromDB, clearRecentsInDB, togglePinInDB, fetchHistory, updateFileNameInDB, findFileByName, getFileById, getUniqueName, deleteFileFromDB, bulkDeleteFromDB, bulkPinInDB } from './db.js';
 import { fetchDriveFile, parseDriveLink, cancelFetch, fetchProxyBlob } from './drive.js';
 import { parseConversation, generateMetadataHTML, getCleanJSON, extractMedia } from './parser.js';
 import * as UI from './ui.js';
@@ -226,9 +226,78 @@ function loadHistory() {
             },
             onTogglePin: (file) => {
                 togglePinInDB(file, () => loadHistory());
+            },
+            onDelete: (id) => {
+                handleDeleteHistory(id);
+            },
+            onRename: (id, newName) => {
+                handleRename(newName, id);
+            },
+            onBulkDelete: (ids) => {
+                handleBulkDeleteHistory(ids);
+            },
+            onBulkPin: (ids, pinnedStatus) => {
+                handleBulkPinHistory(ids, pinnedStatus);
             }
         }, state.currentFileRecordId);
     });
+}
+
+async function handleDeleteHistory(id) {
+    await deleteFileFromDB(id);
+    if (id === state.currentFileRecordId) {
+        resetAppState();
+    }
+    loadHistory();
+    showToast("Item deleted");
+}
+
+async function handleBulkDeleteHistory(ids) {
+    await bulkDeleteFromDB(ids);
+    if (ids.includes(state.currentFileRecordId)) {
+        resetAppState();
+    }
+    loadHistory();
+    showToast(`${ids.length} items deleted`);
+}
+
+async function handleBulkPinHistory(ids, pinnedStatus) {
+    await bulkPinInDB(ids, pinnedStatus);
+    loadHistory();
+    showToast(`${ids.length} items ${pinnedStatus ? 'pinned' : 'unpinned'}`);
+}
+
+function resetAppState() {
+    state.parsedData = null;
+    state.currentPrompts = [];
+    state.currentFileName = "Untitled";
+    state.currentFileId = null;
+    state.currentFileRecordId = null;
+    state.rawContent = null;
+    state.extractedMedia = [];
+
+    updateUrl(null);
+    document.title = "Inspector - Google AI Studio Viewer";
+
+    UI.updateRenamingUI("No file loaded", null);
+    const chatStream = document.getElementById('chat-stream');
+    chatStream.innerHTML = `
+        <div class="empty-state-hero">
+            <div class="hero-icon">
+                <i class="ph ph-file-text"></i>
+            </div>
+            <h2>Ready to Inspect</h2>
+            <p>Drag & Drop a file, use the link loader, or import a JSON from Google AI Studio.</p>
+        </div>
+    `;
+    chatStream.removeAttribute('data-view');
+
+    document.getElementById('prompt-list').innerHTML = '<div class="empty-state-sidebar"><span>Load a file to view conversation</span></div>';
+    document.getElementById('metadata-panel').classList.add('hidden');
+    document.getElementById('downloadGroup').classList.add('hidden');
+    document.getElementById('exportGroup').classList.add('hidden');
+    document.getElementById('nav-widget').classList.add('hidden');
+    UI.showMediaButton(false);
 }
 
 async function attemptScrapeName() {

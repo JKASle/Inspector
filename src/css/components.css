@@ -64,6 +64,25 @@
     background: var(--hover-bg);
 }
 
+.icon-btn-sm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.icon-btn-sm:hover {
+    color: var(--text-main);
+    background: var(--hover-bg);
+}
+
 /* --- Explicit Button Group Styling (Classes Only) --- */
 .btn-group {
     --icon-width: 48px;

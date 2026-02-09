@@ -153,8 +153,7 @@ button.search-toggle.active {
 .recent-file-item {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    gap: 0;
     width: 100%;
     text-align: left;
     background: transparent;
@@ -167,6 +166,26 @@ button.search-toggle.active {
     font-size: 13px;
     font-family: inherit;
     margin-bottom: 2px;
+    position: relative;
+}
+
+.history-checkbox-wrapper {
+    width: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    transition: width 0.2s ease;
+}
+
+.recent-file-item:hover .history-checkbox-wrapper,
+.recent-file-item.selected .history-checkbox-wrapper {
+    width: 24px;
+}
+
+.history-checkbox-wrapper input {
+    cursor: pointer;
+    width: 14px;
+    height: 14px;
 }
 
 .file-name-group {
@@ -175,6 +194,7 @@ button.search-toggle.active {
     gap: 8px;
     overflow: hidden;
     white-space: nowrap;
+    flex: 1;
 }
 
 .file-name-group i {
@@ -199,34 +219,121 @@ button.search-toggle.active {
     font-weight: 500;
 }
 
+.recent-file-item.selected {
+    background: var(--accent-surface);
+}
+
 [data-theme="dark"] .recent-file-item.active {
     background: var(--hover-bg);
     color: var(--text-main);
 }
 
-.pin-btn {
+.history-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.recent-file-item:hover .history-item-actions,
+.recent-file-item.active .history-item-actions {
+    opacity: 1;
+}
+
+.history-action-btn, .pin-btn {
     background: none;
     border: none;
     color: var(--text-muted);
     cursor: pointer;
     font-size: 14px;
-    opacity: 0;
-    transition: all 0.2s;
     padding: 2px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.recent-file-item:hover .pin-btn, .recent-file-item.active .pin-btn {
-    opacity: 1;
-}
-
-.pin-btn:hover {
+.history-action-btn:hover, .pin-btn:hover {
     color: var(--accent-primary);
+    background: var(--bg-app);
     transform: scale(1.1);
 }
 
 .pin-btn.is-pinned {
     opacity: 1;
     color: var(--accent-primary);
+}
+
+.history-rename-input {
+    background: var(--bg-surface);
+    border: 1px solid var(--accent-primary);
+    color: var(--text-main);
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 13px;
+    width: 100%;
+    outline: none;
+    font-family: inherit;
+}
+
+/* Bulk History Bar */
+.bulk-history-bar {
+    background: var(--bg-surface);
+    border: 1px solid var(--accent-primary);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    margin: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    animation: slideInDown 0.2s ease;
+}
+
+@keyframes slideInDown {
+    from { transform: translateY(-10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.bulk-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-main);
+}
+
+.bulk-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.bulk-action-btn {
+    background: var(--bg-app);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 16px;
+}
+
+.bulk-action-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: var(--bg-surface);
+}
+
+.bulk-action-btn.delete:hover {
+    border-color: #ef4444;
+    color: #ef4444;
 }
 
 .scrolling-pinned {
