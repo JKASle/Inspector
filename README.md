@@ -25,27 +25,38 @@ Not enough reason? To find an exhaustive list of benefits that you get from usin
 ## Key Features
 
 **Core Connectivity**
-*   **Universal Import:** Drag and drop JSON files directly, or paste a Google Drive/AI Studio link.
+*   **Universal Import:** Drag and drop JSON files directly, or drag/paste a Google Drive or AI Studio link.
 *   **Smart Paste:** Automatically detects if your clipboard contains raw JSON content or a Google Drive URL and processes it immediately.
 *   **Offline Capable:** You can download the source code and run Inspector locally to view your sensitive prompt logs completely offline. (Full PWA support coming soon).
-*   **Local Persistence:** Uses IndexedDB to cache your recent history and allows you to "Pin" important logs for instant access later.
+*   **Local Persistence:** Uses IndexedDB to cache your recent history. Supports Pinning, Renaming, Deleting, and Bulk Actions (mass pin/delete) for historical logs.
+*   **Dynamic Renaming:** Manually rename conversations or use the **Automated Name Scraping** feature to fetch prompt titles directly from Google AI Studio links. Includes Windows-style conflict resolution for duplicate filenames.
 
-**Visualization & Rendering**
+**Advanced Export System**
+*   **Multi-Level Granularity:** Export the entire conversation, specific prompt turns, or even individual message blocks.
+*   **Rich Format Support:**
+    *   **HTML:** Standalone files with embedded styles and theme consistency.
+    *   **Markdown & Plain Text:** Clean, semantic exports for documentation or re-prompting.
+    *   **Smart Snapshots (PNG):** Generate high-quality, "Carbon-style" images of conversation turns with gradient backgrounds and window controls—perfect for sharing.
+*   **Clipboard Integration:** Copy any part of the conversation as HTML, Markdown, or Text with a single click.
+
+**Media & Visualization**
+*   **Media Gallery:** A centralized gallery to view all images, videos, and audio files from the conversation. Supports **Bulk ZIP Downloads** for both inline and Google Drive-hosted media.
 *   **Rich Markdown Support:** Renders the conversation with full Markdown support, including tables, lists, and links.
-*   **Syntax Highlighting:** Automatically detects coding languages and provides over 15 selectable color themes (e.g., Dracula, Monokai, GitHub Dark) for code blocks.
-*   **Drive Attachment Integration:** It also detects Google Drive Documents and Images linked in the JSON. It provides options to open them externally on Google Drive or view them directly within the app using a specialized proxy to prevent CORS.
+*   **Syntax Highlighting:** Automatically detects coding languages and provides over 15 selectable color themes with **Live Theme Previews**.
+*   **Drive Attachment Integration:** Detects Google Drive Documents and Images. Provides options to open them externally or view them directly within the app using a specialized proxy.
 
 **Navigation & Analysis**
 *   **Dual View Modes:**
     *   *Scroll Mode:* View the entire conversation as a continuous timeline.
-    *   *Focus Mode:* Step through the conversation one turn at a time to isolate specific prompt/response pairs, reducing lag.
-    *   *Deep Search:* Filters the sidebar list by searching for specific text said during the conversation, making it easy to find specific code snippets or concepts.
-*   **Gemini-Specific Metadata:** natively handles "Thinking" blocks (Chain of Thought) with collapsible UI states. It also visualizes safety ratings, token counts for every individual message, system instructions, and other metadata too.
+    *   *Focus Mode:* Step through the conversation one turn at a time to isolate specific prompt/response pairs.
+*   **Deep Search:** Search through the entire conversation content (not just prompt titles) to find specific code snippets or concepts instantly.
+*   **Prompt Grouping:** Supports deep linking to specific turns and custom naming for individual prompt groups within a conversation.
+*   **Gemini-Specific Metadata:** Natively handles "Thinking" blocks (Chain of Thought) with collapsible states. It also visualizes safety ratings, token counts per message, system instructions, and citations.
 
 **Developer Workflow Utilities**
-*   **Sanitized JSON Export:** IMO: One of the most powerful features for heavy users. If your conversation hits the token limit in AI Studio, you can "Strip" the JSON. This converts the complex structure into a clean array of `role: user` / `role: model` text objects. You can then paste this "clean" history into a *new* AI Studio prompt to continue your session with full context but without the overhead.
-*   **Code Block Management:** Toggle text wrapping for long lines, collapse massive code blocks to save scroll space, and copy code with a single click.
-*   **Customizable Layout:** Includes a content width slider to adjust the reading area, I'm hoping the ultrawide monitor users would love that one.
+*   **Sanitized JSON Export:** IMO: One of the most powerful features for heavy users. If your conversation hits the token limit in AI Studio, you can "Strip" the JSON. This converts the complex structure into a clean array of `role: user` / `role: model` text objects for easy re-prompting.
+*   **Code Block Management:** Toggle text wrapping, collapse massive blocks, and copy code with a single click.
+*   **Customizable Layout:** Includes a content width slider to adjust the reading area.
 *   **Theme Engine:** Fully responsive, Light and Dark modes.
 
 ## Advanced Routing & Sharing
@@ -99,9 +110,6 @@ Development on these features depends on community activity (Issues, Stars, and 
 ### Developer Utility
 *Goal: Make this an indispensable tool for debugging and sharing.*
 
-- **Smart Snapshots**:
-    - **HTML**: Bundle the current DOM + inlined CSS into a single `.html` file. Perfect for attaching to tickets or using as a rich-text "quote" in emails.
-    - **Image**: Render specific message blocks as high-quality, watermarked PNGs for easy sharing on Discord, Slack, or Reddit.
 - **Diff View**: Add a "Compare" drop zone to highlight added/removed lines between two different model runs.
 - **PII Redaction Mode**: Regex-based filter to visually blur emails and API keys (toggleable).
 - **Prompt "Fork & Edit"**: Allow in-place text editing and a "Copy Context" button to assemble a new prompt string.
