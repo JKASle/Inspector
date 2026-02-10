@@ -25,7 +25,7 @@ Not enough reason? To find an exhaustive list of benefits that you get from usin
 ## Key Features
 
 **Core Connectivity**
-*   **Universal Import:** Drag and drop JSON files directly, or drag/paste a Google Drive or AI Studio link.
+*   **Universal Import:** Copy & paste or Drag and drop JSON files or Google Drive / AI Studio links directly to get started immediately, or just import from your device.
 *   **Smart Paste:** Automatically detects if your clipboard contains raw JSON content or a Google Drive URL and processes it immediately.
 *   **Offline Capable:** You can download the source code and run Inspector locally to view your sensitive prompt logs completely offline. (Full PWA support coming soon).
 *   **Local Persistence:** Uses IndexedDB to cache your recent history. Supports Pinning, Renaming, Deleting, and Bulk Actions (mass pin/delete) for historical logs.
@@ -43,7 +43,7 @@ Not enough reason? To find an exhaustive list of benefits that you get from usin
 *   **Media Gallery:** A centralized gallery to view all images, videos, and audio files from the conversation. Supports **Bulk ZIP Downloads** for both inline and Google Drive-hosted media.
 *   **Rich Markdown Support:** Renders the conversation with full Markdown support, including tables, lists, and links.
 *   **Syntax Highlighting:** Automatically detects coding languages and provides over 15 selectable color themes with **Live Theme Previews**.
-*   **Drive Attachment Integration:** Detects Google Drive Documents and Images. Provides options to open them externally or view them directly within the app using a specialized proxy.
+*   **Drive Attachment Integration:** Detects Google Drive Documents and Images. Provides options to open them externally or view them directly within the app.
 
 **Navigation & Analysis**
 *   **Dual View Modes:**
@@ -54,9 +54,9 @@ Not enough reason? To find an exhaustive list of benefits that you get from usin
 *   **Gemini-Specific Metadata:** Natively handles "Thinking" blocks (Chain of Thought) with collapsible states. It also visualizes safety ratings, token counts per message, system instructions, and citations.
 
 **Developer Workflow Utilities**
-*   **Sanitized JSON Export:** IMO: One of the most powerful features for heavy users. If your conversation hits the token limit in AI Studio, you can "Strip" the JSON. This converts the complex structure into a clean array of `role: user` / `role: model` text objects for easy re-prompting.
-*   **Code Block Management:** Toggle text wrapping, collapse massive blocks, and copy code with a single click.
-*   **Customizable Layout:** Includes a content width slider to adjust the reading area.
+*   **Sanitized JSON Export:** IMO: One of the most powerful features for heavy users. If your conversation hits the token limit in AI Studio, you can "Strip" the JSON. This converts the complex structure into a clean array of `role: user` / `role: model` text objects. You can then paste this "clean" history into a *new* AI Studio prompt to continue your session with full context but without the overhead.
+*   **Code Block Management:** Toggle text wrapping, collapse code blocks, and copy code with a single click.
+*   **Customizable Layout:** Includes a content width slider to adjust the reading area, I'm hoping the ultrawide monitor users would love that one.
 *   **Theme Engine:** Fully responsive, Light and Dark modes.
 
 ## Advanced Routing & Sharing
