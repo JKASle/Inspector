@@ -492,7 +492,6 @@ async function handleExportTurn(index) {
     container.innerHTML = `
         <div class="export-grid-options">
             <button class="btn btn-secondary" data-format="html"><i class="ph ph-code"></i> HTML</button>
-            <button class="btn btn-secondary" data-format="pdf"><i class="ph ph-file-pdf"></i> PDF</button>
             <button class="btn btn-secondary" data-format="image"><i class="ph ph-image"></i> Image</button>
 
             <div class="export-opt-group">
@@ -513,7 +512,7 @@ async function handleExportTurn(index) {
         </div>
     `;
 
-    const { exportToMarkdown, exportToTxt, exportToHtml, exportToPdf, exportToImage, copyToClipboardAsMarkdown, copyToClipboardAsText, copyToClipboardAsHtml } = await import('./export.js');
+    const { exportToMarkdown, exportToTxt, exportToHtml, exportToImage, copyToClipboardAsMarkdown, copyToClipboardAsText, copyToClipboardAsHtml } = await import('./export.js');
 
     container.querySelectorAll('button').forEach(btn => {
         btn.onclick = async () => {
@@ -528,22 +527,6 @@ async function handleExportTurn(index) {
                 exportToTxt(turnChunks, filename);
             } else if (format === 'copy-txt') {
                 copyToClipboardAsText(turnChunks);
-            } else if (format === 'pdf') {
-                const chatStream = document.getElementById('chat-stream');
-                if (!prefs.isScrollMode && state.focusIndex === index) {
-                    exportToPdf(Array.from(chatStream.children));
-                } else {
-                    const oldHtml = chatStream.innerHTML;
-                    const oldView = chatStream.getAttribute('data-view');
-                    UI.renderConversation(state.parsedData, index, state.currentPrompts);
-                    setTimeout(() => {
-                        exportToPdf(Array.from(chatStream.children));
-                        setTimeout(() => {
-                            if (oldView === 'full') UI.renderFullConversation(state.parsedData, state.currentPrompts);
-                            else UI.renderConversation(state.parsedData, state.focusIndex, state.currentPrompts);
-                        }, 1000);
-                    }, 100);
-                }
             } else if (format === 'html' || format === 'copy-html') {
                 const chatStream = document.getElementById('chat-stream');
                 const isCopy = format === 'copy-html';
@@ -776,7 +759,7 @@ function setupEventListeners() {
 
     async function handleFullExport(format) {
         if (!state.parsedData) return;
-        const { exportToMarkdown, exportToTxt, exportToHtml, exportToPdf, exportToImage, copyToClipboardAsMarkdown, copyToClipboardAsText, copyToClipboardAsHtml } = await import('./export.js');
+        const { exportToMarkdown, exportToTxt, exportToHtml, exportToImage, copyToClipboardAsMarkdown, copyToClipboardAsText, copyToClipboardAsHtml } = await import('./export.js');
         const filename = state.currentFileName;
         const allChunks = state.parsedData.chunkedPrompt.chunks;
 
@@ -788,27 +771,6 @@ function setupEventListeners() {
             exportToTxt(allChunks, filename);
         } else if (format === 'copy-txt') {
             copyToClipboardAsText(allChunks);
-        } else if (format === 'pdf') {
-            if (prefs.isScrollMode) {
-                exportToPdf();
-            } else {
-                UI.showModal({
-                    title: 'Export PDF',
-                    message: 'PDF export works best in Timeline (Scroll) mode. Switch and export?',
-                    headerColor: 'var(--accent-surface)',
-                    iconClass: 'ph ph-file-pdf',
-                    primaryBtn: {
-                        text: 'Switch & Export',
-                        onClick: () => {
-                            const toggle = document.getElementById('sidebarModeToggle');
-                            toggle.checked = true;
-                            toggle.dispatchEvent(new Event('change'));
-                            setTimeout(() => exportToPdf(), 500);
-                        }
-                    },
-                    dismissBtn: { text: 'Cancel' }
-                });
-            }
         } else if (format === 'html' || format === 'copy-html') {
             const chatStream = document.getElementById('chat-stream');
             const isCopy = format === 'copy-html';

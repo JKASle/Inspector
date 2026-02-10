@@ -164,43 +164,6 @@ function generateStandaloneHtml(element, title) {
 </html>`;
 }
 
-/**
- * Trigger browser print for PDF
- */
-export function exportToPdf(targetElements = null) {
-    // Populate print header
-    const printFilename = document.getElementById('print-filename');
-    const printDate = document.getElementById('print-date');
-    const currentFilename = document.getElementById('filename-display')?.title || "Untitled Conversation";
-
-    if (printFilename) printFilename.textContent = currentFilename;
-    if (printDate) printDate.textContent = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-
-    if (targetElements) {
-        if (!Array.isArray(targetElements)) targetElements = [targetElements];
-
-        // Clear any existing targets first
-        document.querySelectorAll('.print-target').forEach(el => el.classList.remove('print-target'));
-
-        targetElements.forEach(el => el.classList.add('print-target'));
-        document.body.classList.add('print-isolated');
-
-        window.print();
-
-        const cleanup = () => {
-            document.body.classList.remove('print-isolated');
-            targetElements.forEach(el => el.classList.remove('print-target'));
-            window.removeEventListener('afterprint', cleanup);
-        };
-
-        window.addEventListener('afterprint', cleanup);
-
-        // Fallback cleanup
-        setTimeout(cleanup, 2000);
-    } else {
-        window.print();
-    }
-}
 
 /**
  * Export element as Image (Carbon.sh Style)
@@ -344,7 +307,7 @@ export async function exportToImage(element, filename) {
         showToast("Snapshot saved");
     } catch (error) {
         console.error('Image export failed:', error);
-        showToast('Image export failed. Try HTML or PDF.', 'ph-fill ph-x-circle');
+        showToast('Image export failed. Try HTML or Markdown.', 'ph-fill ph-x-circle');
     }
 }
 

@@ -1514,7 +1514,6 @@ function createMessageElement(chunks, role, id = null) {
         const copyText = tooltip.querySelector('[data-action="copy-text"]');
         const expHtml = tooltip.querySelector('[data-action="export-html"]');
         const expTxt = tooltip.querySelector('[data-action="export-txt"]');
-        const expPdf = tooltip.querySelector('[data-action="export-pdf"]');
         const expImg = tooltip.querySelector('[data-action="export-image"]');
         const dlMedia = tooltip.querySelector('[data-action="download-media"]');
         
@@ -1551,11 +1550,6 @@ function createMessageElement(chunks, role, id = null) {
         expTxt.onclick = async () => {
             const { exportToTxt } = await import('./export.js');
             exportToTxt(chunks, `Message_${filename}`);
-        };
-
-        expPdf.onclick = async () => {
-            const { exportToPdf } = await import('./export.js');
-            exportToPdf(wrapper);
         };
 
         expImg.onclick = async () => {
